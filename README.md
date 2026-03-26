@@ -10,6 +10,12 @@ A tool for the UVA Cavalier Daily's Puzzle Desk to automate the development of H
 ```bash
 python3 -m venv my_venv # all devices
 
+source my_venv/bin/activate   # Mac/Linux
+
+OR 
+
+venv\Scripts\activate      # Windows
+
 pip install -r requirements.txt
 ```
 
