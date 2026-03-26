@@ -4,6 +4,11 @@ import tempfile
 import os
 import time
 
+from docx import Document
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx.opc.constants import RELATIONSHIP_TYPE as RT
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
@@ -124,6 +129,68 @@ def classify_words(words: List[str]):
 
     return common, rare
 
+# hyperlinker 
+
+def add_hyperlink(paragraph, url, text):
+    part = paragraph.part
+    r_id = part.relate_to(url, RT.HYPERLINK, is_external=True)
+
+    hyperlink = OxmlElement('w:hyperlink')
+    hyperlink.set(qn('r:id'), r_id)
+
+    new_run = OxmlElement('w:r')
+    rPr = OxmlElement('w:rPr')
+
+    # Style (blue + underline)
+    u = OxmlElement('w:u')
+    u.set(qn('w:val'), 'single')
+    rPr.append(u)
+
+    color = OxmlElement('w:color')
+    color.set(qn('w:val'), '0000FF')
+    rPr.append(color)
+
+    new_run.append(rPr)
+
+    text_elem = OxmlElement('w:t')
+    text_elem.text = text
+    new_run.append(text_elem)
+
+    hyperlink.append(new_run)
+    paragraph._p.append(hyperlink)
+
+    return hyperlink
+
+
+# doc creator
+def create_docx(common, rare, filename="oed_classification.docx"):
+    doc = Document()
+
+    doc.add_heading("OED Word Classification", 0)
+
+    # -----------------------------
+    # Common Words
+    # -----------------------------
+    doc.add_heading("Common Words", 1)
+
+    for word, link, reason in common:
+        p = doc.add_paragraph()
+        add_hyperlink(p, oed_link(word), word)
+
+    # -----------------------------
+    # Rare Words
+    # -----------------------------
+    doc.add_heading("Rare / Excluded Words", 1)
+
+    for word, link, reason in rare:
+        p = doc.add_paragraph()
+        add_hyperlink(p, oed_link(word), word)
+        if reason:
+            p.add_run(f" – {reason}")
+
+    doc.save(filename)
+    return filename
+
 # -----------------------------
 # HTML generator (UNCHANGED)
 # -----------------------------
@@ -187,3 +254,12 @@ if uploaded_file is not None:
             data=open(tmp_rare.name, "rb"),
             file_name="rare_words.html"
         )
+
+        docx_path = create_docx(common, rare)
+
+        with open(docx_path, "rb") as f:
+            st.download_button(
+                "Download Word Document (.docx)",
+                data=f,
+                file_name="oed_classification.docx"
+            )
