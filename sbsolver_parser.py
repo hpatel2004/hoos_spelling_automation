@@ -21,8 +21,8 @@ def fetch_words_sbsolver(letters: str):
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
 
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-
+    driver = webdriver.Chrome(options=options)
+    
     try:
         driver.get(url)
         # Wait a few seconds for JS to render
