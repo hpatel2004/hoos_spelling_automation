@@ -3,6 +3,7 @@ from typing import List, Tuple
 import tempfile
 import os
 import time
+import random
 
 from docx import Document
 from docx.oxml import OxmlElement
@@ -37,9 +38,10 @@ def classify_words(words: List[str]):
     options.add_argument("--disable-dev-shm-usage")
 
     driver = webdriver.Chrome(options=options)
-    wait = WebDriverWait(driver, 3)
+    wait = WebDriverWait(driver, 6)
 
     for word in words:
+        time.sleep(random.uniform(3, 8))
         print(f"Processing {word}...")
         url = oed_link(word)
 
@@ -49,7 +51,7 @@ def classify_words(words: List[str]):
             try:
                 # ✅ grab the WHOLE result card (matches your HTML exactly)
                 result = wait.until(
-                    EC.presence_of_element_located((By.CLASS_NAME, "resultsSetItem"))
+                    EC.visibility_of_element_located((By.CLASS_NAME, "resultsSetItem"))
                 )
             except:
                 rare.append((word, f'<a href="{OED_HOME}">{word}</a>', "No results"))
