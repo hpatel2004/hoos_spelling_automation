@@ -41,7 +41,7 @@ def classify_words(words: List[str]):
     wait = WebDriverWait(driver, 6)
 
     for word in words:
-        time.sleep(random.uniform(3, 8))
+        time.sleep(random.uniform(6, 11))
         print(f"Processing {word}...")
         url = oed_link(word)
 
