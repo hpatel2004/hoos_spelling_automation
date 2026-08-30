@@ -1,14 +1,19 @@
-import streamlit as st
-from typing import List, Tuple
-import tempfile
-import os
+from typing import List, Tuple, Optional, TypedDict
+import html as html_module
 import time
 import random
+import unicodedata
+import urllib.parse
 
 from docx import Document
+from docx.enum.text import WD_COLOR_INDEX
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.opc.constants import RELATIONSHIP_TYPE as RT
+from docx.shared import RGBColor
+
+EDITORIAL_INCLUDED_NOTE = "in existing editorially included list"
+EDITORIAL_EXCLUDED_NOTE = "in existing editorially excluded list"
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -19,20 +24,203 @@ from selenium.webdriver.support import expected_conditions as EC
 OED_HOME = "https://www.oed.com/"
 
 # -----------------------------
+# Helpers
+# -----------------------------
+def parse_word_list(text: str) -> List[str]:
+    words = []
+    for line in text.splitlines():
+        word = line.strip()
+        if word:
+            words.append(unicodedata.normalize("NFC", word).upper())
+    return words
+
+
+HYPHEN_CHARS = "-‐‑‒–—―"
+
+
+def contains_hyphen(text: str) -> bool:
+    return any(ch in HYPHEN_CHARS for ch in text)
+
+
+def contains_accent(text: str) -> bool:
+    normalized = unicodedata.normalize("NFD", text)
+    if any(unicodedata.category(ch) == "Mn" for ch in normalized):
+        return True
+    return any(ch.isalpha() and ord(ch) > 127 for ch in text)
+
+
+def get_word_form_rejection(word: str) -> Optional[str]:
+    if contains_hyphen(word):
+        return "Contains hyphen"
+    if contains_accent(word):
+        return "Contains accent"
+    return None
+
+
+def detect_center_letter(words: List[str]) -> str:
+    if not words:
+        return ""
+
+    letter_sets = [set(word.upper()) for word in words]
+    common_letters = set.intersection(*letter_sets)
+
+    if len(common_letters) == 1:
+        return next(iter(common_letters))
+    if len(common_letters) > 1:
+        return ", ".join(sorted(common_letters))
+    return ""
+
+
+class PuzzleLevels(TypedDict):
+    wa: int
+    wahoo: int
+    wahoowa: int
+    wahoo_wow: int
+    average: int
+
+
+def calculate_levels(total_words: int, words: Optional[List[str]] = None) -> PuzzleLevels:
+    if total_words <= 0:
+        return {
+            "wa": 0,
+            "wahoo": 0,
+            "wahoowa": 0,
+            "wahoo_wow": 0,
+            "average": 0,
+        }
+
+    wahoo_wow = total_words
+
+    # Wa: low bar that most players can reach (~12% of puzzle, minimum 5 words).
+    wa = max(5, round(total_words * 0.12))
+
+    # Wahoo: encouraging next step (~30% of puzzle, at least 5 words above Wa).
+    wahoo = max(wa + 5, round(total_words * 0.30))
+    wahoo = min(wahoo, max(wa + 1, wahoo_wow - 1))
+    wa = min(wa, max(1, wahoo - 1))
+
+    # Average: midpoint between Wa and Wahoo.
+    average = round((wa + wahoo) / 2)
+    average = max(wa + 1, min(average, wahoo - 1))
+
+    # Wahoowa: estimate from shorter, familiar-length words in the final list.
+    if words:
+        easy_word_count = sum(1 for word in words if 4 <= len(word) <= 6)
+        wahoowa = easy_word_count if easy_word_count > 0 else round(total_words * 0.45)
+    else:
+        wahoowa = round(total_words * 0.45)
+
+    wahoowa = max(wahoo + 1, min(wahoowa, wahoo_wow))
+
+    return {
+        "wa": wa,
+        "wahoo": wahoo,
+        "wahoowa": wahoowa,
+        "wahoo_wow": wahoo_wow,
+        "average": average,
+    }
+
+
+def apply_wahoowa_override(levels: PuzzleLevels, wahoowa_override: Optional[int]) -> PuzzleLevels:
+    if wahoowa_override is None or wahoowa_override <= 0:
+        return levels
+
+    updated = dict(levels)
+    updated["wahoowa"] = max(
+        levels["wahoo"] + 1,
+        min(wahoowa_override, levels["wahoo_wow"]),
+    )
+    return updated  # type: ignore[return-value]
+
+
+def apply_editorial_filters(
+    common: List[Tuple[str, str, str]],
+    rare: List[Tuple[str, str, str]],
+    editorial_included: List[str],
+    editorial_excluded: List[str],
+) -> Tuple[List[Tuple[str, str, str]], List[Tuple[str, str, str]]]:
+    common_dict = {word: (word, link, reason) for word, link, reason in common}
+    rare_dict = {word: (word, link, reason) for word, link, reason in rare}
+
+    # Force-include: only override OED rejections for words on the editorial list.
+    for word in editorial_included:
+        if word in rare_dict:
+            _, link, _ = rare_dict.pop(word)
+            common_dict[word] = (word, link, EDITORIAL_INCLUDED_NOTE)
+
+    # Force-exclude: only override OED approvals for words on the editorial list.
+    for word in editorial_excluded:
+        if word in common_dict:
+            _, link, _ = common_dict.pop(word)
+            rare_dict[word] = (word, link, EDITORIAL_EXCLUDED_NOTE)
+
+    common = sorted(common_dict.values(), key=lambda x: x[0])
+    rare = sorted(rare_dict.values(), key=lambda x: x[0])
+    return common, rare
+
+
+# -----------------------------
 # OED functions
 # -----------------------------
 def oed_link(word: str) -> str:
-    return f"{OED_HOME}search/dictionary/?scope=Entries&q={word}"
+    return f"{OED_HOME}search/dictionary/?scope=Entries&q={urllib.parse.quote(word)}"
+
+
+def _classify_oed_result(word: str, result, url: str) -> Tuple[str, str, str]:
+    link = f'<a href="{url}">{word}</a>'
+
+    try:
+        title = result.find_element(By.CLASS_NAME, "hw").text.strip()
+    except Exception:
+        title = ""
+
+    if contains_hyphen(title):
+        return "rare", link, "Hyphenated form"
+    if contains_accent(title):
+        return "rare", link, "Accented form"
+
+    try:
+        freq_div = result.find_element(By.CLASS_NAME, "frequencyIndicator")
+        usage = int(freq_div.get_attribute("aria-valuenow"))
+    except Exception:
+        usage = None
+
+    try:
+        snippet = result.find_element(By.CLASS_NAME, "snippet").text.lower()
+    except Exception:
+        snippet = ""
+
+    try:
+        ps_text = result.find_element(By.CLASS_NAME, "ps").text.lower()
+    except Exception:
+        ps_text = ""
+
+    is_variant = "variant of" in ps_text
+    is_slang = "slang" in snippet
+
+    is_proper_noun = (
+        bool(title)
+        and title[0].isupper()
+        and any(c.islower() for c in title[1:])
+    )
+
+    if is_variant:
+        return "rare", link, "Variant form"
+    if is_proper_noun:
+        return "rare", link, "Proper noun"
+    if is_slang:
+        return "rare", link, "Slang"
+    if usage is None:
+        return "rare", link, "Missing frequency data"
+    if usage <= 2:
+        return "rare", link, f"Low frequency ({usage})"
+    return "common", link, ""
+
 
 def classify_words(words: List[str]):
     common, rare = [], []
-    variant_markers = ["variant of", "also a variant of", "alteration of", "spelling of"]
 
-    # -----------------------------
-    # Selenium setup
-    # -----------------------------
     options = Options()
-    # options.add_argument("--headless=new")
     options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
@@ -41,120 +229,65 @@ def classify_words(words: List[str]):
     wait = WebDriverWait(driver, 6)
 
     for word in words:
-        time.sleep(random.uniform(6, 11))
         print(f"Processing {word}...")
+
+        rejection = get_word_form_rejection(word)
+        if rejection:
+            rare.append((word, f'<a href="{oed_link(word)}">{word}</a>', rejection))
+            continue
+
+        time.sleep(random.uniform(4, 7))
         url = oed_link(word)
 
         try:
             driver.get(url)
 
             try:
-                # ✅ grab the WHOLE result card (matches your HTML exactly)
                 result = wait.until(
                     EC.visibility_of_element_located((By.CLASS_NAME, "resultsSetItem"))
                 )
-            except:
-                rare.append((word, f'<a href="{OED_HOME}">{word}</a>', "No results"))
+            except Exception:
+                rare.append((word, f'<a href="{url}">{word}</a>', "No results"))
                 continue
 
-            # -----------------------------
-            # Frequency (WORKS on search page)
-            # -----------------------------
-            try:
-                freq_div = result.find_element(By.CLASS_NAME, "frequencyIndicator")
-                usage = int(freq_div.get_attribute("aria-valuenow"))
-            except:
-                usage = None
-
-            # -----------------------------
-            # Snippet (definition preview)
-            # -----------------------------
-            try:
-                snippet = result.find_element(By.CLASS_NAME, "snippet").text.lower()
-            except:
-                snippet = ""
-
-            # -----------------------------
-            # Variant detection
-            # -----------------------------
-            try:
-                ps_text = result.find_element(By.CLASS_NAME, "ps").text.lower()
-            except:
-                ps_text = ""
-
-            is_variant = "variant of" in ps_text
-            # -----------------------------
-            # Slang detection
-            # -----------------------------
-            is_slang = "slang" in snippet
-
-            # -----------------------------
-            # Proper noun detection
-            # -----------------------------
-            try:
-                title = result.find_element(By.CLASS_NAME, "hw").text.strip()
-                is_proper_noun = title and title[0].isupper()
-            except:
-                is_proper_noun = False
-
-            # -----------------------------
-            # Get REAL entry link
-            # -----------------------------
-            link = f'<a href="{url}">{word}</a>'
-
-            # -----------------------------
-            # CLASSIFICATION
-            # -----------------------------
-            if is_variant:
-                rare.append((word, link, "Variant form"))
-            elif is_proper_noun:
-                rare.append((word, link, "Proper noun"))
-            elif is_slang:
-                rare.append((word, link, "Slang"))
-            elif usage is None:
-                rare.append((word, link, "Missing frequency data"))
-            elif usage <= 2:
-                rare.append((word, link, f"Low frequency ({usage})"))
+            bucket, link, reason = _classify_oed_result(word, result, url)
+            if bucket == "common":
+                common.append((word, link, reason))
             else:
-                common.append((word, link, ""))
+                rare.append((word, link, reason))
 
         except Exception:
-            rare.append((word, f'<a href="{OED_HOME}">{word}</a>', "Error fetching"))
+            rare.append((word, f'<a href="{oed_link(word)}">{word}</a>', "Error fetching"))
 
     driver.quit()
 
-    # -----------------------------
-    # SORTING
-    # -----------------------------
     common.sort(key=lambda x: x[0])
     rare.sort(key=lambda x: x[0])
 
     return common, rare
 
-# hyperlinker 
 
 def add_hyperlink(paragraph, url, text):
     part = paragraph.part
     r_id = part.relate_to(url, RT.HYPERLINK, is_external=True)
 
-    hyperlink = OxmlElement('w:hyperlink')
-    hyperlink.set(qn('r:id'), r_id)
+    hyperlink = OxmlElement("w:hyperlink")
+    hyperlink.set(qn("r:id"), r_id)
 
-    new_run = OxmlElement('w:r')
-    rPr = OxmlElement('w:rPr')
+    new_run = OxmlElement("w:r")
+    rPr = OxmlElement("w:rPr")
 
-    # Style (blue + underline)
-    u = OxmlElement('w:u')
-    u.set(qn('w:val'), 'single')
+    u = OxmlElement("w:u")
+    u.set(qn("w:val"), "single")
     rPr.append(u)
 
-    color = OxmlElement('w:color')
-    color.set(qn('w:val'), '0000FF')
+    color = OxmlElement("w:color")
+    color.set(qn("w:val"), "0000FF")
     rPr.append(color)
 
     new_run.append(rPr)
 
-    text_elem = OxmlElement('w:t')
+    text_elem = OxmlElement("w:t")
     text_elem.text = text
     new_run.append(text_elem)
 
@@ -164,38 +297,103 @@ def add_hyperlink(paragraph, url, text):
     return hyperlink
 
 
-# doc creator
-def create_docx(common, rare, filename="oed_classification.docx"):
+def split_removed_words(rare: List[Tuple[str, str, str]]):
+    removed_words = []
+    editorially_removed = []
+    for item in rare:
+        if item[2] == EDITORIAL_EXCLUDED_NOTE:
+            editorially_removed.append(item)
+        else:
+            removed_words.append(item)
+    return removed_words, editorially_removed
+
+
+def add_bold_heading(doc: Document, text: str):
+    paragraph = doc.add_paragraph()
+    run = paragraph.add_run(text)
+    run.bold = True
+    return paragraph
+
+
+def add_word_entry(doc: Document, word: str, reason: str = "", numbered: bool = True):
+    style = "List Number" if numbered else None
+    paragraph = doc.add_paragraph(style=style)
+    add_hyperlink(paragraph, oed_link(word), word)
+    if reason:
+        paragraph.add_run(f" – {reason}")
+
+
+def create_docx(
+    common,
+    rare,
+    filename="oed_classification.docx",
+    creator: str = "",
+    link: str = "",
+    levels: Optional[PuzzleLevels] = None,
+    puzzle_title: str = "",
+):
     doc = Document()
 
-    doc.add_heading("OED Word Classification", 0)
+    word_count = len(common)
+    center_letter = detect_center_letter([word for word, _, _ in common])
+    removed_words, editorially_removed = split_removed_words(rare)
+    if levels is None:
+        levels = calculate_levels(word_count, [word for word, _, _ in common])
 
-    # -----------------------------
-    # Common Words
-    # -----------------------------
-    doc.add_heading("Common Words", 1)
+    if puzzle_title:
+        doc.add_heading(puzzle_title, 0)
 
-    for word, link, reason in common:
-        p = doc.add_paragraph()
-        add_hyperlink(p, oed_link(word), word)
+    table = doc.add_table(rows=3, cols=2)
+    table.style = "Table Grid"
+    metadata = [
+        ("Creator", creator),
+        ("Center Letter", center_letter),
+        ("Link", link),
+    ]
+    for row_index, (label, value) in enumerate(metadata):
+        table.rows[row_index].cells[0].text = label
+        table.rows[row_index].cells[1].text = value
 
-    # -----------------------------
-    # Rare Words
-    # -----------------------------
-    doc.add_heading("Rare / Excluded Words", 1)
+    doc.add_paragraph()
 
-    for word, link, reason in rare:
-        p = doc.add_paragraph()
-        add_hyperlink(p, oed_link(word), word)
-        if reason:
-            p.add_run(f" – {reason}")
+    add_bold_heading(doc, "Words")
+    for word, _, reason in common:
+        add_word_entry(doc, word, reason)
+
+    doc.add_paragraph()
+
+    add_bold_heading(doc, "Removed Words")
+    for word, _, reason in removed_words:
+        add_word_entry(doc, word, reason)
+
+    doc.add_paragraph()
+
+    editorial_header = doc.add_paragraph()
+    editorial_run = editorial_header.add_run("Editorially Removed")
+    editorial_run.font.color.rgb = RGBColor(0, 0, 255)
+    editorial_run.font.underline = True
+    editorial_header.add_run(" Words ")
+    flag_run = editorial_header.add_run("FLAG FOR COPY")
+    flag_run.font.highlight_color = WD_COLOR_INDEX.YELLOW
+
+    for word, _, reason in editorially_removed:
+        add_word_entry(doc, word, reason)
+    if not editorially_removed:
+        doc.add_paragraph("-")
+
+    doc.add_paragraph()
+
+    add_bold_heading(doc, "Levels")
+    doc.add_paragraph(f"Wa = {levels['wa']}")
+    doc.add_paragraph(f"Wahoo = {levels['wahoo']}")
+    doc.add_paragraph(f"Wahoowa = {levels['wahoowa']}")
+    doc.add_paragraph(f"WahooWOW = {levels['wahoo_wow']}")
+    doc.add_paragraph(f"Average = {levels['average']}")
 
     doc.save(filename)
     return filename
 
-# -----------------------------
-# HTML generator (UNCHANGED)
-# -----------------------------
+
 def write_html_file(title: str, items):
     html = f"""<!DOCTYPE html>
 <html>
@@ -210,58 +408,101 @@ def write_html_file(title: str, items):
     html += "\n</ul></body></html>"
     return html
 
-# -----------------------------
-# Streamlit UI (UNCHANGED)
-# -----------------------------
-st.set_page_config(page_title="Hoos Spelling Puzzle - OED Linker")
-st.title("Step 2: OED Classification")
 
-uploaded_file = st.file_uploader("Upload reviewed word list (TXT)", type=["txt"])
+def _escape(text: str) -> str:
+    return html_module.escape(text or "")
 
-if uploaded_file is not None:
-    words = [line.strip() for line in uploaded_file.read().decode("utf-8").splitlines() if line.strip()]
-    st.write(f"Loaded {len(words)} words for classification.")
 
-    if st.button("Classify Words"):
-        with st.spinner("Querying OED and classifying words..."):
-            common, rare = classify_words(words)
+TABLE_CELL_STYLE = "border: 1px solid #000000; padding: 4px 8px;"
 
-        st.subheader("Common Words")
-        for _, link, reason in common:
-            st.markdown(f"- {link} ({reason})", unsafe_allow_html=True)
 
-        st.subheader("Rare / Excluded Words")
-        for _, link, reason in rare:
-            st.markdown(f"- {link} ({reason})", unsafe_allow_html=True)
+def _table_cell(content: str) -> str:
+    return f'<td style="{TABLE_CELL_STYLE}">{content}</td>'
 
-        common_html = write_html_file("Common Words", common)
-        rare_html = write_html_file("Rare / Variant / Missing Words", rare)
 
-        tmp_common = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
-        tmp_common.write(common_html.encode("utf-8"))
-        tmp_common.close()
+def _table_row(label: str, value: str) -> str:
+    return f"<tr>{_table_cell(_escape(label))}{_table_cell(value)}</tr>"
 
-        tmp_rare = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
-        tmp_rare.write(rare_html.encode("utf-8"))
-        tmp_rare.close()
 
-        st.download_button(
-            "Download Common Words HTML",
-            data=open(tmp_common.name, "rb"),
-            file_name="common_words.html"
-        )
+def _word_list_item_html(word: str, reason: str = "") -> str:
+    line = f'<a href="{_escape(oed_link(word))}">{_escape(word)}</a>'
+    if reason:
+        line += f" – {_escape(reason)}"
+    return f"<li>{line}</li>"
 
-        st.download_button(
-            "Download Rare Words HTML",
-            data=open(tmp_rare.name, "rb"),
-            file_name="rare_words.html"
-        )
 
-        docx_path = create_docx(common, rare)
+def _word_list_html(items) -> str:
+    if not items:
+        return "<ol><li>-</li></ol>"
+    return "<ol>" + "".join(_word_list_item_html(word, reason) for word, _, reason in items) + "</ol>"
 
-        with open(docx_path, "rb") as f:
-            st.download_button(
-                "Download Word Document (.docx)",
-                data=f,
-                file_name="oed_classification.docx"
-            )
+
+def build_output_html(
+    common,
+    rare,
+    creator: str = "",
+    link: str = "",
+    levels: Optional[PuzzleLevels] = None,
+    puzzle_title: str = "",
+    center_letter: str = "",
+) -> str:
+    removed_words, editorially_removed = split_removed_words(rare)
+    if levels is None:
+        levels = calculate_levels(len(common), [word for word, _, _ in common])
+
+    parts = [
+        "<!DOCTYPE html>",
+        "<html>",
+        "<head>",
+        '<meta charset="UTF-8">',
+        "<style>",
+        "body { font-family: Arial, sans-serif; }",
+        "h1 { margin-bottom: 16px; }",
+        "p { margin: 4px 0; }",
+        "ol { margin-top: 4px; }",
+        "</style>",
+        "</head>",
+        "<body>",
+    ]
+
+    if puzzle_title:
+        parts.append(f"<h1>{_escape(puzzle_title)}</h1>")
+
+    parts.append(
+        '<table border="1" cellspacing="0" cellpadding="4" '
+        'style="border-collapse: collapse; width: 100%; margin-bottom: 16px;">'
+    )
+    metadata = [
+        ("Creator", _escape(creator)),
+        ("Center Letter", _escape(center_letter)),
+        ("Link", f'<a href="{_escape(link)}">{_escape(link)}</a>' if link else ""),
+    ]
+    for label, value in metadata:
+        parts.append(_table_row(label, value))
+    parts.append("</table>")
+
+    parts.append("<p><strong>Words</strong></p>")
+    parts.append(_word_list_html(common))
+
+    parts.append("<p><strong>Removed Words</strong></p>")
+    parts.append(_word_list_html(removed_words))
+
+    parts.append("<p>")
+    parts.append('<span style="color: blue; text-decoration: underline;">Editorially Removed</span>')
+    parts.append(' Words <span style="background: yellow;">FLAG FOR COPY</span></p>')
+
+    parts.append(_word_list_html(editorially_removed))
+
+    parts.append("<p><strong>Levels</strong></p>")
+    level_labels = [
+        ("wa", "Wa"),
+        ("wahoo", "Wahoo"),
+        ("wahoowa", "Wahoowa"),
+        ("wahoo_wow", "WahooWOW"),
+        ("average", "Average"),
+    ]
+    for key, label in level_labels:
+        parts.append(f"<p>{label} = {levels[key]}</p>")
+
+    parts.append("</body></html>")
+    return "".join(parts)

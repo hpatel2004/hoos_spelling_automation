@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# One-time setup for Hoos Spelling automation.
+# See README.md for usage details.
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "Error: python3 is required (3.10+ recommended). Install Python and try again."
+  exit 1
+fi
+
+echo "Creating virtual environment in my_venv..."
+python3 -m venv my_venv
+
+echo "Activating virtual environment..."
+# shellcheck disable=SC1091
+source my_venv/bin/activate
+
+echo "Installing dependencies from requirements.txt..."
+pip install --upgrade pip
+pip install -r requirements.txt
+
+echo ""
+echo "Setup complete."
+echo ""
+echo "Next steps:"
+echo "  1. Activate the virtual environment:"
+echo "       source my_venv/bin/activate    # Mac/Linux"
+echo "       my_venv\\Scripts\\activate       # Windows"
+echo "  2. Run the app: streamlit run app.py"
+echo ""
+echo "Note: Google Chrome is required for Selenium scraping."

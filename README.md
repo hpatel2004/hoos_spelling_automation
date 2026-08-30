@@ -8,6 +8,14 @@ A tool for the UVA Cavalier Daily's Puzzle Desk to automate the development of H
 2. Clone or download this repo by running `git clone https://github.com/hpatel2004/hoos_spelling_automation.git`, then run:
 
 ```bash
+./one_time_setup
+```
+
+This creates a virtual environment, installs dependencies, and prints next steps.
+
+To set up manually instead:
+
+```bash
 python3 -m venv my_venv # all devices
 
 source my_venv/bin/activate   # Mac/Linux
@@ -31,11 +39,11 @@ venv\Scripts\activate      # Windows
 ```
 You should have (my_venv) at the beginning of the command line. 
 
-2. To generate the list of words from sbsolver, run `streamlit run sbsolver_parser.py`
-3. Download the generated list as a .txt
-4. To classify the words by the OED, run `streamlit run oed_parser.py`
-5. Upload your .txt of words
-6. Download results as HTML or Word document. 
+2. Run the app with `streamlit run app.py`
+3. In **Step 1**, enter the seven puzzle letters and fetch words from SB Solver
+4. Switch to **Step 2** — the word list, puzzle title, and SB Solver link carry over automatically
+5. Optionally paste editorially included/excluded word lists, then classify
+6. Download results as HTML or Word document 
 
 ## Notes
 
