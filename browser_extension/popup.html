@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Hoos Spelling Importer</title>
+    <style>
+      body {
+        width: 260px;
+        margin: 0;
+        padding: 18px;
+        color: #18222d;
+        font: 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      h1 { font-size: 16px; margin: 0 0 8px; }
+      p { color: #5f6b76; line-height: 1.4; margin: 0 0 14px; }
+      button {
+        width: 100%;
+        border: 0;
+        border-radius: 6px;
+        background: #e57200;
+        color: white;
+        cursor: pointer;
+        font-weight: 600;
+        padding: 10px 12px;
+      }
+      button:disabled { cursor: wait; opacity: 0.65; }
+      #status { min-height: 20px; margin-top: 12px; }
+      .success { color: #176b3a; }
+      .error { color: #a51c30; }
+    </style>
+  </head>
+  <body>
+    <h1>Hoos Spelling</h1>
+    <p>Import the words currently displayed on the SB Solver page.</p>
+    <button id="import">Import Words</button>
+    <div id="status" role="status"></div>
+    <script src="popup.js"></script>
+  </body>
+</html>

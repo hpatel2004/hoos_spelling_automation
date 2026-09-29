@@ -1,5 +1,6 @@
 import json
 import tempfile
+import webbrowser
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -15,7 +16,8 @@ from oed_parser import (
     parse_word_list,
     split_removed_words,
 )
-from sbsolver_parser import fetch_words_sbsolver, sbsolver_link
+from browser_import import start_import_server, take_imported_words
+from sbsolver_parser import sbsolver_link
 
 
 def init_session_state():
@@ -100,34 +102,49 @@ def render_step1():
         placeholder="pRincej",
     )
 
-    if st.button("Fetch Words", key="fetch_words"):
+    if st.button("Open SB Solver", key="open_sbsolver"):
         if not letters:
             st.error("Enter seven letters first.")
             return
 
-        with st.spinner("Fetching words from SB Solver..."):
-            try:
-                words = fetch_words_sbsolver(letters)
-                if not words:
-                    st.error("No words found. Make sure the letters are valid.")
-                    return
-
-                st.session_state.puzzle_letters = letters
-                st.session_state.word_list_text = "\n".join(words)
-                st.session_state.classification_results = None
-                st.success(f"Fetched {len(words)} words.")
-            except Exception as e:
-                st.error(f"Error fetching words: {e}")
-                return
-
-    if st.session_state.word_list_text:
-        st.text_area(
-            "Word list (automatically shared with Step 2)",
-            value=st.session_state.word_list_text,
-            height=400,
+        st.session_state.puzzle_letters = letters
+        st.session_state.classification_results = None
+        webbrowser.open(sbsolver_link(letters))
+        st.info(
+            "Complete the verification in your browser, then use the Hoos Spelling "
+            "browser button to import the words."
         )
-        st.code(st.session_state.word_list_text, language=None)
 
+    if st.button("Import Words from Browser", key="import_browser_words"):
+        imported_words = take_imported_words()
+        if imported_words:
+            imported_text = "\n".join(imported_words)
+            st.session_state.word_list_text = imported_text
+            st.session_state.step1_word_list = imported_text
+            st.session_state.classification_results = None
+            st.success(f"Imported {len(imported_words)} words from SB Solver.")
+        else:
+            st.warning(
+                "No imported words yet. Open SB Solver, complete verification, "
+                "then click Import Words in the browser extension."
+            )
+
+    with st.expander("One-time browser importer setup"):
+        st.markdown(
+            "1. Open `chrome://extensions` in Chrome.\n"
+            "2. Turn on **Developer mode**.\n"
+            "3. Click **Load unpacked** and choose the `browser_extension` "
+            "folder in this project.\n"
+            "4. Pin **Hoos Spelling Word Importer** to your toolbar."
+        )
+
+    pasted_words = st.text_area(
+        "Paste SB Solver word list (automatically shared with Step 2)",
+        value=st.session_state.word_list_text,
+        height=400,
+        key="step1_word_list",
+    )
+    st.session_state.word_list_text = pasted_words
 
 def run_classification(
     word_list_text: str,
@@ -280,6 +297,7 @@ def render_step2():
 
 def main():
     st.set_page_config(page_title="Hoos Spelling Puzzle Generator", layout="wide")
+    start_import_server()
     init_session_state()
 
     st.title("Hoos Spelling Puzzle Generator")
