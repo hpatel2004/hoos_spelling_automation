@@ -1,4 +1,4 @@
-from typing import List, Tuple, Optional, TypedDict
+from typing import Callable, List, Tuple, Optional, TypedDict
 import html as html_module
 import time
 import random
@@ -217,8 +217,16 @@ def _classify_oed_result(word: str, result, url: str) -> Tuple[str, str, str]:
     return "common", link, ""
 
 
-def classify_words(words: List[str]):
+def classify_words(
+    words: List[str],
+    progress_callback: Optional[Callable[[int, int, str], None]] = None,
+):
     common, rare = [], []
+    total = len(words)
+    if progress_callback:
+        progress_callback(0, total, "")
+    if not words:
+        return common, rare
 
     options = Options()
     options.add_argument("--disable-gpu")
@@ -228,38 +236,44 @@ def classify_words(words: List[str]):
     driver = webdriver.Chrome(options=options)
     wait = WebDriverWait(driver, 6)
 
-    for word in words:
-        print(f"Processing {word}...")
-
-        rejection = get_word_form_rejection(word)
-        if rejection:
-            rare.append((word, f'<a href="{oed_link(word)}">{word}</a>', rejection))
-            continue
-
-        time.sleep(random.uniform(4, 7))
-        url = oed_link(word)
-
-        try:
-            driver.get(url)
-
+    try:
+        for index, word in enumerate(words, start=1):
+            if progress_callback:
+                progress_callback(index - 1, total, word)
+            print(f"Processing {word}...")
             try:
-                result = wait.until(
-                    EC.visibility_of_element_located((By.CLASS_NAME, "resultsSetItem"))
-                )
-            except Exception:
-                rare.append((word, f'<a href="{url}">{word}</a>', "No results"))
-                continue
+                rejection = get_word_form_rejection(word)
+                if rejection:
+                    rare.append((word, f'<a href="{oed_link(word)}">{word}</a>', rejection))
+                    continue
 
-            bucket, link, reason = _classify_oed_result(word, result, url)
-            if bucket == "common":
-                common.append((word, link, reason))
-            else:
-                rare.append((word, link, reason))
+                time.sleep(random.uniform(4, 7))
+                url = oed_link(word)
 
-        except Exception:
-            rare.append((word, f'<a href="{oed_link(word)}">{word}</a>', "Error fetching"))
+                try:
+                    driver.get(url)
 
-    driver.quit()
+                    try:
+                        result = wait.until(
+                            EC.visibility_of_element_located((By.CLASS_NAME, "resultsSetItem"))
+                        )
+                    except Exception:
+                        rare.append((word, f'<a href="{url}">{word}</a>', "No results"))
+                        continue
+
+                    bucket, link, reason = _classify_oed_result(word, result, url)
+                    if bucket == "common":
+                        common.append((word, link, reason))
+                    else:
+                        rare.append((word, link, reason))
+
+                except Exception:
+                    rare.append((word, f'<a href="{oed_link(word)}">{word}</a>', "Error fetching"))
+            finally:
+                if progress_callback:
+                    progress_callback(index, total, word)
+    finally:
+        driver.quit()
 
     common.sort(key=lambda x: x[0])
     rare.sort(key=lambda x: x[0])

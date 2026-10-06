@@ -1,4 +1,9 @@
 hoos_venv/
+my_venv/
+.venv/
+__pycache__/
+*.py[cod]
+.DS_Store
 common_words.html
 rare_words.html
 words.txt

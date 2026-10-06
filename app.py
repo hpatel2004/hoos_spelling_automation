@@ -1,6 +1,4 @@
 import json
-import tempfile
-import webbrowser
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -16,8 +14,12 @@ from oed_parser import (
     parse_word_list,
     split_removed_words,
 )
-from browser_import import start_import_server, take_imported_words
-from sbsolver_parser import sbsolver_link
+from sbsolver_parser import (
+    fetch_words_sbsolver,
+    sbsolver_link,
+    validate_sbsolver_letters,
+)
+from sbsolver_import import parse_saved_sbsolver_page
 
 
 def init_session_state():
@@ -93,58 +95,98 @@ def render_copyable_output(output_html: str):
     )
 
 
+def set_word_list(text: str):
+    st.session_state.word_list_text = text
+    st.session_state.step1_word_list = text
+    st.session_state.step2_word_list = text
+    st.session_state.classification_results = None
+
+
+def sync_word_list(source_key: str):
+    set_word_list(st.session_state[source_key])
+
+
 def render_step1():
     st.subheader("Step 1: Fetch Words from SB Solver")
 
+    if "puzzle_letters_input" not in st.session_state:
+        st.session_state.puzzle_letters_input = st.session_state.puzzle_letters
     letters = st.text_input(
-        "Enter letters (e.g., pRincej)",
-        value=st.session_state.puzzle_letters,
+        "Six puzzle letters plus a placeholder (uppercase center)",
+        key="puzzle_letters_input",
         placeholder="pRincej",
-    )
+    ).strip()
 
-    if st.button("Open SB Solver", key="open_sbsolver"):
-        if not letters:
-            st.error("Enter seven letters first.")
-            return
-
-        st.session_state.puzzle_letters = letters
-        st.session_state.classification_results = None
-        webbrowser.open(sbsolver_link(letters))
-        st.info(
-            "Complete the verification in your browser, then use the Hoos Spelling "
-            "browser button to import the words."
-        )
-
-    if st.button("Import Words from Browser", key="import_browser_words"):
-        imported_words = take_imported_words()
-        if imported_words:
-            imported_text = "\n".join(imported_words)
-            st.session_state.word_list_text = imported_text
-            st.session_state.step1_word_list = imported_text
+    valid_letters = False
+    if letters:
+        try:
+            validate_sbsolver_letters(letters)
+        except ValueError as exc:
+            st.error(str(exc))
             st.session_state.classification_results = None
-            st.success(f"Imported {len(imported_words)} words from SB Solver.")
         else:
-            st.warning(
-                "No imported words yet. Open SB Solver, complete verification, "
-                "then click Import Words in the browser extension."
-            )
+            valid_letters = True
+            if letters != st.session_state.puzzle_letters:
+                st.session_state.puzzle_letters = letters
+                set_word_list("")
 
-    with st.expander("One-time browser importer setup"):
-        st.markdown(
-            "1. Open `chrome://extensions` in Chrome.\n"
-            "2. Turn on **Developer mode**.\n"
-            "3. Click **Load unpacked** and choose the `browser_extension` "
-            "folder in this project.\n"
-            "4. Pin **Hoos Spelling Word Importer** to your toolbar."
+    if valid_letters:
+        st.link_button("Open SB Solver in your normal browser", sbsolver_link(letters))
+        st.caption(
+            "If automatic fetching gets stuck on a repeating security check, "
+            "open this link in your usual Chrome window. Save the loaded puzzle "
+            "as HTML, then upload it under Import a saved SB Solver page below. "
+            "You can also paste the words manually."
         )
 
-    pasted_words = st.text_area(
+    if st.button(
+        "Fetch Words from SB Solver", key="fetch_sbsolver", disabled=not valid_letters
+    ):
+        st.session_state.classification_results = None
+        try:
+            with st.spinner("Waiting for the SB Solver word list in Chrome..."):
+                imported_words = fetch_words_sbsolver(letters)
+        except Exception as exc:
+            st.error(f"Could not fetch words from SB Solver: {exc}")
+        else:
+            set_word_list("\n".join(imported_words))
+            st.success(f"Fetched {len(imported_words)} words from SB Solver.")
+
+    with st.expander("Import a saved SB Solver page"):
+        st.caption(
+            "Once the words are visible in your normal Chrome window, use "
+            "Save page as to save the puzzle as HTML. Upload the .html file "
+            "here; the app extracts the word list without its links or formatting. "
+            "If Chrome also creates a folder of page assets, you only need the HTML file."
+        )
+        saved_page = st.file_uploader(
+            "Saved SB Solver puzzle page (.html)",
+            type=["html", "htm"],
+            key="sbsolver_saved_page",
+        )
+        if st.button(
+            "Import words from saved page",
+            key="import_saved_sbsolver",
+            disabled=not valid_letters or saved_page is None,
+        ):
+            try:
+                saved_words = parse_saved_sbsolver_page(saved_page.getvalue())
+            except ValueError as exc:
+                st.error(str(exc))
+            else:
+                set_word_list("\n".join(saved_words))
+                st.success(f"Imported {len(saved_words)} words from the saved SB Solver page.")
+
+    if "step1_word_list" not in st.session_state:
+        st.session_state.step1_word_list = st.session_state.word_list_text
+
+    st.text_area(
         "Paste SB Solver word list (automatically shared with Step 2)",
-        value=st.session_state.word_list_text,
         height=400,
         key="step1_word_list",
+        on_change=sync_word_list,
+        args=("step1_word_list",),
     )
-    st.session_state.word_list_text = pasted_words
 
 def run_classification(
     word_list_text: str,
@@ -152,12 +194,13 @@ def run_classification(
     wahoowa_override: int,
     editorial_included_text: str,
     editorial_excluded_text: str,
+    progress_callback=None,
 ):
     words = parse_word_list(word_list_text)
     editorial_included = parse_word_list(editorial_included_text)
     editorial_excluded = parse_word_list(editorial_excluded_text)
 
-    common, rare = classify_words(words)
+    common, rare = classify_words(words, progress_callback=progress_callback)
     common, rare = apply_editorial_filters(
         common, rare, editorial_included, editorial_excluded
     )
@@ -229,6 +272,19 @@ def render_classification_results(results: dict):
         )
 
 
+def clear_classification_results():
+    st.session_state.classification_results = None
+
+
+def combine_editorial_word_lists(pasted_text: str, uploaded_file) -> str:
+    uploaded_text = (
+        uploaded_file.getvalue().decode("utf-8-sig")
+        if uploaded_file is not None
+        else ""
+    )
+    return "\n".join((pasted_text, uploaded_text)).strip()
+
+
 def render_step2():
     st.subheader("Step 2: OED Classification")
 
@@ -242,14 +298,16 @@ def render_step2():
     else:
         st.warning("Enter letters in Step 1 first to auto-fill the puzzle title and link.")
 
+    if "step2_word_list" not in st.session_state:
+        st.session_state.step2_word_list = st.session_state.word_list_text
     word_list_text = st.text_area(
         "Word list (one word per line)",
-        value=st.session_state.word_list_text,
         height=300,
         placeholder="AERATE\nARETE\nARTERY\n...",
         key="step2_word_list",
+        on_change=sync_word_list,
+        args=("step2_word_list",),
     )
-    st.session_state.word_list_text = word_list_text
 
     with st.expander("Optional: Puzzle metadata"):
         creator = st.text_input("Creator", placeholder="Heer Patel")
@@ -264,16 +322,54 @@ def render_step2():
         )
 
     with st.expander("Optional: Editorial word filters"):
+        st.caption(
+            "These lists override OED decisions as a final filter. Upload UTF-8 "
+            "text files with one word per line, or paste below. Uploaded and "
+            "pasted lists are combined. Only words in the candidate list are "
+            "affected; exclusion takes precedence if a word appears in both lists."
+        )
+        editorial_included_file = st.file_uploader(
+            "Upload editorially included words (.txt)",
+            type=["txt"],
+            key="editorial_included_file",
+            on_change=clear_classification_results,
+        )
         editorial_included_text = st.text_area(
             "Editorially included words (one per line)",
             height=150,
             placeholder="Override OED rejections: move these words into Words",
+            key="editorial_included_text",
+            on_change=clear_classification_results,
+        )
+        editorial_excluded_file = st.file_uploader(
+            "Upload editorially excluded words (.txt)",
+            type=["txt"],
+            key="editorial_excluded_file",
+            on_change=clear_classification_results,
         )
         editorial_excluded_text = st.text_area(
             "Editorially excluded words (one per line)",
             height=150,
             placeholder="Override OED approvals: move these words into Removed Words",
+            key="editorial_excluded_text",
+            on_change=clear_classification_results,
         )
+
+        editorial_uploads_valid = True
+        try:
+            editorial_included_text = combine_editorial_word_lists(
+                editorial_included_text, editorial_included_file
+            )
+            editorial_excluded_text = combine_editorial_word_lists(
+                editorial_excluded_text, editorial_excluded_file
+            )
+        except UnicodeDecodeError:
+            st.error(
+                "Could not read an editorial word list. Save both lists as "
+                "UTF-8 plain text (.txt), then upload them again."
+            )
+            clear_classification_results()
+            editorial_uploads_valid = False
 
     if not word_list_text.strip():
         return
@@ -281,15 +377,31 @@ def render_step2():
     words = parse_word_list(word_list_text)
     st.write(f"Loaded {len(words)} words for classification.")
 
-    if st.button("Classify Words", key="classify_words"):
-        with st.spinner("Querying OED and classifying words..."):
+    if st.button(
+        "Classify Words", key="classify_words", disabled=not editorial_uploads_valid
+    ):
+        clear_classification_results()
+        progress = st.progress(0.0, text=f"Processed 0 of {len(words)} words.")
+
+        def report_progress(done: int, total: int, word: str):
+            message = f"Processed {done} of {total} words."
+            if word:
+                message += f" Current word: {word}."
+            progress.progress(done / total if total else 0.0, text=message)
+
+        try:
             st.session_state.classification_results = run_classification(
                 word_list_text,
                 creator,
                 wahoowa_override,
                 editorial_included_text,
                 editorial_excluded_text,
+                progress_callback=report_progress,
             )
+        except Exception as exc:
+            st.error(f"Could not finish OED classification: {exc}")
+        else:
+            progress.progress(1.0, text=f"Finished processing {len(words)} words.")
 
     if st.session_state.classification_results:
         render_classification_results(st.session_state.classification_results)
@@ -297,7 +409,6 @@ def render_step2():
 
 def main():
     st.set_page_config(page_title="Hoos Spelling Puzzle Generator", layout="wide")
-    start_import_server()
     init_session_state()
 
     st.title("Hoos Spelling Puzzle Generator")
