@@ -34,7 +34,11 @@ removed from the main app. Editorial inclusion/exclusion inputs remain available
 Compare the imported list with the source puzzle before classification. Importing
 another page or changing puzzle letters clears prior classification results.
 The automatic acquisition module remains available to the separate developer
-pilot/verifier; it is not part of the editor-facing acquisition flow.
+pilot and the separate **Verifier** tab; it is not part of the import-and-classify
+flow. The user explicitly chose to keep the verifier automatic, with its hosted
+access limitation stated. It compares counts for each of seven possible centers,
+before OED rules, and starts only on **Analyze letter sets**. The Docker image
+includes the `verify` package so this tab and the standalone tool share one UI.
 
 ## Pilot limitations
 
@@ -45,7 +49,7 @@ SB Solver fetching did not work in that test. See `HOSTING_PILOT_RESULTS.md`.
 The legacy classifier still conflates
 some technical failures with rejections, so its hosted output is not ready for
 publication. Use the isolated source probe to establish access before the broader
-overhaul. Free Render storage/jobs are not yet durable. The Docker image has not
+overhaul. Jobs and drafts are session-local by user choice; persistence across refreshes or restarts is not required. The Docker image has not
 been built locally in this environment because Docker is unavailable. The user
 report is hosted smoke-test evidence, not a completed production acceptance test.
 

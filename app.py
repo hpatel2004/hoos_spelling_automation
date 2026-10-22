@@ -19,6 +19,7 @@ from sbsolver_parser import (
     validate_sbsolver_letters,
 )
 from sbsolver_import import parse_saved_sbsolver_page
+from verify.verifier import render_verifier
 
 
 def init_session_state():
@@ -40,7 +41,7 @@ def render_copyable_output(output_html: str):
         .replace("</body></html>", "")
         .strip()
     )
-    escaped_html = json.dumps(output_html)
+    escaped_html = json.dumps(output_html).replace("<", "\\u003c")
 
     components.html(
         f"""
@@ -49,8 +50,9 @@ def render_copyable_output(output_html: str):
                 Copy formatted output
             </button>
             <p style="color: #666; font-size: 14px; margin-top: 0;">
-                Paste into Google Docs or Word to keep hyperlinks. You can also select text below and copy manually.
+                Copy, then paste normally into Google Docs or Word to keep Times New Roman formatting and clickable links.
             </p>
+            <p id="copy-status" role="status" aria-live="polite" style="font-size: 14px;"></p>
             <div id="output-content" style="border: 1px solid #ccc; padding: 16px; background: white;">
                 {body_html}
             </div>
@@ -60,8 +62,10 @@ def render_copyable_output(output_html: str):
 
         document.getElementById("copy-btn").addEventListener("click", async () => {{
             const content = document.getElementById("output-content");
-            const copyHtml = "<html><body>" + content.innerHTML + "</body></html>";
+            const copyHtml = fullHtml;
             const plainText = content.innerText;
+            const status = document.getElementById("copy-status");
+            let copied = false;
 
             try {{
                 await navigator.clipboard.write([
@@ -70,15 +74,26 @@ def render_copyable_output(output_html: str):
                         "text/plain": new Blob([plainText], {{ type: "text/plain" }}),
                     }}),
                 ]);
+                copied = true;
             }} catch (error) {{
                 const range = document.createRange();
                 range.selectNodeContents(content);
                 const selection = window.getSelection();
                 selection.removeAllRanges();
                 selection.addRange(range);
-                document.execCommand("copy");
-                selection.removeAllRanges();
+                try {{
+                    copied = document.execCommand("copy");
+                }} catch (fallbackError) {{
+                    copied = false;
+                }}
+                if (copied) selection.removeAllRanges();
             }}
+
+            if (!copied) {{
+                status.textContent = "Automatic copying is unavailable. The document is selected; press Ctrl+C or Command+C, then paste into your editor.";
+                return;
+            }}
+            status.textContent = "Copied with formatting. Paste into Google Docs or Word.";
 
             const button = document.getElementById("copy-btn");
             const originalText = button.textContent;
@@ -220,7 +235,7 @@ def render_classification_results(results: dict):
         center_letter=center_letter,
     )
 
-    st.subheader("Copyable output")
+    st.subheader("Copy-ready document")
     render_copyable_output(output_html)
 
     docx_filename = f"{puzzle_title}.docx" if puzzle_title else "oed_classification.docx"
@@ -383,13 +398,18 @@ def main():
 
     st.title("Hoos Spelling Puzzle Generator")
 
-    step1_tab, step2_tab = st.tabs(["Step 1: Import SB Solver", "Step 2: OED Classification"])
+    step1_tab, step2_tab, verifier_tab = st.tabs(
+        ["Step 1: Import SB Solver", "Step 2: OED Classification", "Verifier"]
+    )
 
     with step1_tab:
         render_step1()
 
     with step2_tab:
         render_step2()
+
+    with verifier_tab:
+        render_verifier()
 
 
 if __name__ == "__main__":

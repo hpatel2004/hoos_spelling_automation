@@ -424,6 +424,7 @@ def _escape(text: str) -> str:
 
 
 TABLE_CELL_STYLE = "border: 1px solid #000000; padding: 4px 8px;"
+DOCUMENT_STYLE = "font-family: 'Times New Roman', Times, serif; font-size: 12pt; line-height: 1.25; color: #000000;"
 
 
 def _table_cell(content: str) -> str:
@@ -466,13 +467,14 @@ def build_output_html(
         "<head>",
         '<meta charset="UTF-8">',
         "<style>",
-        "body { font-family: Arial, sans-serif; }",
+        "body { font-family: 'Times New Roman', Times, serif; font-size: 12pt; }",
         "h1 { margin-bottom: 16px; }",
         "p { margin: 4px 0; }",
         "ol { margin-top: 4px; }",
         "</style>",
         "</head>",
         "<body>",
+        f'<div style="{DOCUMENT_STYLE}">',
     ]
 
     if puzzle_title:
@@ -514,5 +516,5 @@ def build_output_html(
     for key, label in level_labels:
         parts.append(f"<p>{label} = {levels[key]}</p>")
 
-    parts.append("</body></html>")
+    parts.append("</div></body></html>")
     return "".join(parts)

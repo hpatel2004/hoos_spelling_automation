@@ -11,12 +11,13 @@ These decisions supersede conflicting proposed requirements below.
 
 - **Acquisition UI (latest decision):** Saved SB Solver HTML import is the primary and only candidate-input path in the main editor UI. Show its uploader directly, outside any expander. Remove automatic-fetch and candidate-list paste controls; retain the normal-browser puzzle link, clear saving instructions, and a read-only imported-word preview. This supersedes earlier fetch-first and candidate-edit/paste requirements below. Editorial included/excluded list inputs remain supported.
 - **Budget:** Prefer free hosting or very low cost. No paid hosting commitment or platform has been selected; measure feasibility and cost in Milestone 0.
-- **Access:** Public site, no user accounts. Low expected distribution does not remove the need for bounded resource use and per-draft isolation. Draft recovery mechanism remains to be chosen.
+- **Access:** Public site, no user accounts. Low expected distribution does not remove the need for bounded resource use and per-draft isolation. Draft recovery is not required.
 - **Overrides:** Existing included/excluded lists may explicitly resolve technical OED lookup failures for candidate words; exclusion wins. Preserve the underlying unresolved lookup status separately from the final editorial decision and attribute resolution to the list. Do not require a separate per-word manual verification when an existing list supplies the resolution.
 - **Access gate:** If hosted OED access is unavailable, pause implementation until supported access is available. A manual-only OED workflow is not an approved substitute. Individual failures during otherwise viable access may still be resolved through editorial lists.
 - **Levels:** Wa, Wahoo, Wahoowa, and Average are chosen manually. Do not calculate them or silently clamp them using the current formulas. WahooWOW may default to the final accepted-word count. Manual level edits belong to the reviewed snapshot and invalidate prior exports.
 - **Reference puzzles:** See `reference_puzzles/editorial_examples.json`. REGICD has 33 accepted words (the blank item 34 was an error), EGER is editorially excluded, and its historical no-results/missing-frequency rejections were manually verified. ANOYIG has 35 accepted words, with NONAGON and ONIONY editorially included. Both examples have manually chosen levels. Building an editorial word database is deferred; retain pasted/uploaded lists.
-- **Launch reliability:** Durable progress and per-editor isolation are required for launch, regardless of their P1 checklist labels.
+- **Session lifetime (latest decision):** Saving jobs or drafts across refreshes, disconnects, restarts, or redeploys is not required. Use session-local state; do not add a database, persistent disk, recovery links, or durable worker solely for recovery. Earlier persistence/recovery requirements, tests and risk mitigations below are deferred. Per-editor isolation and prevention of stale or mixed output remain required.
+- **Final output (latest decision):** Prioritize a rendered document and rich copy/paste into Google Docs or Word, in 12-point Times New Roman with serif fallbacks. Preserve numbered lists, the metadata table, clickable links, and editorial highlights. Downloads remain available as alternatives.
 
 ## 1. Product objective (non-negotiable)
 
@@ -84,7 +85,7 @@ A no-login OED experience in a normal browser does **not** prove that automated 
 
 ### Step C — OED classification
 
-- Launch hosted classification as a background job so the UI can refresh or disconnect safely; at a minimum, completed decisions must not vanish when the browser tab reloads.
+- Run classification within the active session. Recovery after refresh, disconnect, or server restart is not required.
 - For each candidate, preserve the existing form-screening and first-OED-result evaluation. Base classification on **search-result metadata**, including usage bars; full dictionary entry text is not a requirement.
 - Use explicit result statuses rather than collapsing technical failures into `Removed Words`:
   - `ACCEPTED` — passed existing OED checks.
@@ -172,7 +173,7 @@ Design decisions:
 - **Web UI:** Existing Streamlit app, reorganized into Create / Import / Review / Export. A separate frontend/API is unnecessary for MVP.
 - **Scrapers:** Server-side, headless-capable Chromium/Selenium *if permitted and reliable on the host*. The macOS-specific `open -na Google Chrome`, fixed debug port, and shared browser profile must not appear in the deployed path.
 - **Worker:** Background execution independent of a Streamlit button's single request; one active browser job at a time is acceptable for MVP. Enqueue rather than launch competing browser sessions.
-- **State:** Store puzzle draft, candidate list, job state, per-word decision/evidence, and reviewed result snapshot. A persistent SQLite database can support a **single persistent instance with an attached volume**; if deploying multiple replicas or ephemeral containers, use managed shared storage (e.g., PostgreSQL). Do not use Streamlit session state as the only durable storage.
+- **State:** Keep candidate words, metadata, overrides, and results in per-editor Streamlit session state. No durable storage or cross-refresh/restart recovery is required. Keep output consistent with current inputs.
 - **Storage:** Prefer temporary/in-memory export bytes; no shared filenames, no unbounded file buildup. Keep source caching only when permitted and for an appropriate lifetime.
 - **Service reliability:** Healthcheck, bounded retries, timeout handling, provider-specific error codes, structured logs with job IDs, and graceful restart/resume for incomplete jobs.
 - **Security:** HTTPS, server-only browser ports, validation and size limits on uploads, HTML escaping, safe hyperlinks, per-job isolation, resource limits, and rate limiting to protect a publicly reachable service. If staff-only use is desired, a simple access gate may be added without requiring users to install anything.
@@ -281,7 +282,7 @@ Requirements:
 - [ ] Streamlit is served on the host-provided port, bound to `0.0.0.0`, with HTTPS supplied by the hosting platform.
 - [ ] No macOS `open`, desktop window, or visitor-local `127.0.0.1` dependency is used in production.
 - [ ] One public HTTPS site URL is usable from macOS and Windows without installs.
-- [ ] Restart/redeploy does not erase completed jobs or corrupt user drafts; if using a single instance, attach a persistent volume.
+- [ ] Session-local operation requires no persistent volume; editors complete and copy/download output during the active session.
 - [ ] Headless SB Solver/OED accessibility, selector behavior, and license/site-terms constraints are validated from the **actual deployment host** with a representative puzzle.
 - [ ] Server browser sessions have concurrency limits and are cleaned up after success/failure.
 - [ ] Unexpected source changes show actionable error messages, not blank pages or silently empty lists.
@@ -306,10 +307,10 @@ Requirements:
 1. Open site on a second device with **no Python installed** and finish a sample run.
 2. Confirm SB Solver automatic fetch behavior from the server; separately test the HTML import fallback after an access challenge.
 3. Confirm **public OED first-result metadata** and three-bar read from the hosting provider without OED login; compare several known words and staff classifications.
-4. Start a long classification, refresh/close/reopen the tab, then recover the result.
+4. Confirm classification results remain usable through ordinary interactions within the active session.
 5. Run two editors concurrently and confirm no browser/session/job leakage.
 6. Copy results to Google Docs and Word; download and manually inspect both HTML and DOCX links.
-7. Stop/restart a worker during a job, then confirm a recoverable incomplete state.
+7. Confirm session state and generated output are isolated between editors; restart recovery is out of scope.
 8. Verify mobile browser readability as a bonus; desktop editing is the primary target.
 
 ## 10. Implementation sequence (ordered; do not skip source pilot)
@@ -349,10 +350,10 @@ Requirements:
 - Add explicit blocked/unresolved states; keep HTML/paste import fully functional.
 - Keep first OED result and all established editorial decisions unchanged.
 
-**Milestone 3 — Editor-facing website and durable jobs**
+**Milestone 3 — Editor-facing website and session isolation**
 
 - Simplify to Create -> Import -> Classify/Review -> Copy/Download.
-- Add single-worker queue, persistent drafts, statuses, retry of unresolved items, and per-editor isolation.
+- Add bounded browser work, statuses, retry of unresolved items, and per-editor session isolation. Durable jobs and drafts are deferred.
 - No live browser view or per-word animation required.
 
 **Milestone 4 — Deploy and hand off**
@@ -427,7 +428,7 @@ These are **anticipated issues**, not a list of bugs proven in the hosted versio
 
 1. **Availability:** An editor with a fresh browser can open the shared URL and either fetch verified candidates or complete the explicit browser-only SB Solver fallback.
 2. **Classification:** Every candidate has a verified rule decision **or** a conspicuous, editor-resolved OED exception; a challenged/missing page is never represented as a normal OED rejection.
-3. **Persistence/isolation:** Two simultaneous editors, a refresh, and a server restart cannot cause cross-user leakage, lost completed work, or stale export.
+3. **Session isolation:** Simultaneous editors cannot cause cross-user leakage or mixed/stale export. Cross-refresh/restart recovery is not required.
 4. **Publishing output:** The same reviewed result generates preview, rich copy, HTML, and DOCX with intact Word/Google Docs hyperlinks and the correct six-letter/center/placeholder metadata.
 5. **Operations:** Host limits and costs have been measured, source access restrictions reviewed, and staff given a documented failure/recovery process.
 

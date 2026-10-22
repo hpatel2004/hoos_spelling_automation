@@ -207,7 +207,7 @@ class StreamlitWorkflowTests(unittest.TestCase):
                 self.assertEqual(at.session_state["word_list_text"], "RICE\nPRINCE\nPRICE")
                 self.assertEqual(at.code[0].value, "RICE\nPRINCE\nPRICE")
                 self.assertFalse(any(item.key == "fetch_sbsolver" for item in at.button))
-                self.assertEqual({item.key for item in at.text_area}, {"editorial_included_text", "editorial_excluded_text"})
+                self.assertEqual({item.key for item in at.text_area}, {"editorial_included_text", "editorial_excluded_text", "verifier_letters"})
                 self.assertFalse(any(item.label == "Import a saved SB Solver page" for item in at.expander))
                 fetch.assert_not_called()
                 button(at, "classify_words").click().run()

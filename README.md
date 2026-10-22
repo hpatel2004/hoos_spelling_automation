@@ -47,7 +47,7 @@ You should have (my_venv) at the beginning of the command line.
 3. In **Step 1: Import SB Solver**, enter the six actual puzzle letters plus your chosen seventh placeholder. Capitalize the actual center letter and leave the others lowercase. Click **Open puzzle in SB Solver**, wait until the word table loads in your normal browser, then use **Save page as** to save the page as HTML. Upload the `.html` file directly in Step 1 and click **Import words**. If the browser saves an accompanying assets folder, upload only the HTML file. Review the imported words shown below; import another saved page to replace them.
 4. Switch to **Step 2: OED Classification** — the imported list, puzzle title, and SB Solver link carry over automatically. Candidate words come from the HTML import; there is no automatic-fetch or candidate-paste control.
 5. In **Optional: Editorial word filters**, optionally upload included and excluded word lists as UTF-8 `.txt` files (one word per line), or paste them. These override OED decisions after classification. Only candidate words are affected, and exclusion wins if a word appears in both lists. Changing a filter clears the previous results; click **Classify Words** to apply the updated lists.
-6. Click **Classify Words**. A progress bar shows the number of words processed and the current word, then download results as HTML or a Word document.
+6. Click **Classify Words**. A progress bar shows the number of words processed and the current word, then use **Copy formatted output** to paste the finished document into Google Docs or Word in 12-point Times New Roman with clickable links. HTML and Word downloads remain available. Complete the workflow in the active session; jobs and drafts are not saved across refreshes or restarts.
 
 ## Notes
 
@@ -59,7 +59,14 @@ You should have (my_venv) at the beginning of the command line.
 
 ## Verification
 
-Run the optional center-letter comparison tool with:
+Open the **Verifier** tab in the main app to compare SB Solver candidate counts
+for every possible center of one or more seven-letter sets. These counts help
+choose a puzzle; they are before OED classification and editorial overrides.
+The verifier retains automatic fetching and may be blocked by SB Solver on
+Render. It runs only when **Analyze letter sets** is clicked, and its results
+are separate from the imported puzzle. Green, bold cells mark the selected range.
+
+The same tool can also run separately with:
 
 ```bash
 streamlit run verify/verifier.py
