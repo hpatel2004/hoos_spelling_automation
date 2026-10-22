@@ -112,6 +112,16 @@ def render_copyable_output(output_html: str):
 def set_word_list(text: str):
     st.session_state.word_list_text = text
     st.session_state.classification_results = None
+    st.session_state.words_to_remove = []
+
+
+def remove_selected_words():
+    removed = set(st.session_state.get("words_to_remove", []))
+    remaining = [
+        word for word in parse_word_list(st.session_state.word_list_text)
+        if word not in removed
+    ]
+    set_word_list("\n".join(remaining))
 
 
 def render_step1():
@@ -176,8 +186,20 @@ def render_step1():
     if st.session_state.word_list_text:
         words = parse_word_list(st.session_state.word_list_text)
         st.subheader(f"Imported words ({len(words)})")
-        st.caption("Check that these words match your puzzle. To replace the list, import another saved page.")
+        st.caption(
+            "Review the list and select any words to remove below. Step 2 uses the "
+            "remaining words. Placeholder-containing words are kept unless you remove them. "
+            "Import the saved page again to restore the original list."
+        )
         st.code(st.session_state.word_list_text, language=None)
+        selected = st.multiselect(
+            "Words to remove", options=words, key="words_to_remove",
+            placeholder="Select words…",
+        )
+        st.button(
+            "Remove selected words", key="remove_selected_words",
+            disabled=not selected, on_click=remove_selected_words,
+        )
 
 
 def run_classification(

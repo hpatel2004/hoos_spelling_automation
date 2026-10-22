@@ -174,6 +174,38 @@ class VerifierSolverTests(unittest.TestCase):
 
 
 class StreamlitWorkflowTests(unittest.TestCase):
+    def test_manual_deletions_propagate_to_classification_and_clear_old_results(self):
+        page_with_placeholder = SAVED_PAGE.replace(b">PRICE<", b">QICE<")
+        def classify(words, progress_callback=None):
+            return [(word, "", "") for word in words], []
+
+        with NamedTemporaryFile(suffix=".docx") as export:
+            with patch("streamlit.file_uploader", return_value=BytesIO(page_with_placeholder)), patch("oed_parser.classify_words", side_effect=classify) as lookup, patch("oed_parser.create_docx", return_value=export.name):
+                at = AppTest.from_file("app.py").run()
+                at.text_input[0].set_value("pRinceq").run()
+                button(at, "import_saved_sbsolver").click().run()
+                self.assertEqual(at.session_state["word_list_text"], "RICE\nPRINCE\nQICE")
+                self.assertTrue(button(at, "remove_selected_words").disabled)
+                at.multiselect[0].set_value(["QICE"]).run()
+                button(at, "remove_selected_words").click().run()
+                self.assertFalse(at.exception)
+                self.assertEqual(at.session_state["word_list_text"], "RICE\nPRINCE")
+                self.assertEqual(at.multiselect[0].value, [])
+                self.assertTrue(any("Loaded 2 words" in item.value for item in at.markdown))
+                button(at, "classify_words").click().run()
+                self.assertFalse(at.exception)
+                self.assertEqual(lookup.call_args.args[0], ["RICE", "PRINCE"])
+                self.assertIsNotNone(at.session_state["classification_results"])
+                at.multiselect[0].set_value(["RICE", "PRINCE"]).run()
+                button(at, "remove_selected_words").click().run()
+                self.assertFalse(at.exception)
+                self.assertEqual(at.session_state["word_list_text"], "")
+                self.assertIsNone(at.session_state["classification_results"])
+                self.assertFalse(any(item.key == "classify_words" for item in at.button))
+                button(at, "import_saved_sbsolver").click().run()
+                self.assertEqual(at.session_state["word_list_text"], "RICE\nPRINCE\nQICE")
+                self.assertFalse(at.exception)
+
     def test_saved_import_editorial_sheet_links_progress_and_replacement(self):
         uploads = {
             "sbsolver_saved_page": BytesIO(SAVED_PAGE),
