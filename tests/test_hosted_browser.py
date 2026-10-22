@@ -45,9 +45,15 @@ class HostedSolverTests(unittest.TestCase):
                 desktop.assert_not_called()
 
     def browser(self, text="Puzzle", url="https://www.sbsolver.com/s/reGicdq"):
-        browser = Mock(current_url=url)
+        browser = Mock(current_url=url, title="SB Solver")
         browser.find_element.return_value.text = text
-        browser.find_elements.return_value = [Mock(text="DEGREE"), Mock(text="degree"), Mock(text="REGICIDE")]
+        def elements(by, selector):
+            if selector == "body":
+                return [Mock(text=text)]
+            if selector == solver.WORD_SELECTOR:
+                return [Mock(text="DEGREE"), Mock(text="degree"), Mock(text="REGICIDE")]
+            return []
+        browser.find_elements.side_effect = elements
         return browser
 
     def test_reads_source_words_and_closes_browser(self):
@@ -60,8 +66,28 @@ class HostedSolverTests(unittest.TestCase):
         browser = self.browser(text="Verify you are human")
         with self.assertRaisesRegex(RuntimeError, "blocked or challenged"):
             self.run_fetch(browser)
-        browser.find_elements.assert_not_called()
+        self.assertFalse(any(call.args[1] == solver.WORD_SELECTOR for call in browser.find_elements.call_args_list))
         browser.quit.assert_called_once()
+
+    def test_empty_body_with_challenge_title_is_blocked(self):
+        browser = self.browser(text="")
+        browser.title = "Just a moment..."
+        with self.assertRaisesRegex(RuntimeError, "blocked or challenged"):
+            self.run_fetch(browser)
+        browser.quit.assert_called_once()
+
+    def test_navigation_timeout_still_detects_challenge(self):
+        browser = self.browser(text="")
+        browser.title = "Just a moment..."
+        browser.get.side_effect = TimeoutException()
+        with self.assertRaisesRegex(RuntimeError, "blocked or challenged"):
+            self.run_fetch(browser)
+        browser.quit.assert_called_once()
+
+    def test_unreadable_browser_does_not_confirm_challenge(self):
+        browser = self.browser()
+        browser.find_elements.side_effect = WebDriverException()
+        self.assertFalse(solver._hosted_challenge_detected(browser))
 
     def test_wrong_puzzle_rejected(self):
         browser = self.browser(url="https://www.sbsolver.com/s/gaiNoqy")

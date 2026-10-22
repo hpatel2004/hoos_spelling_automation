@@ -29,13 +29,16 @@ reference puzzle before treating acquisition as verified.
 
 ## Pilot limitations
 
-The OED browser uses the same headless startup on Linux. Hosted OED access and
-editorial parity are still unverified. The legacy classifier still conflates
+The OED browser uses the same headless startup on Linux. The user reports a
+successful hosted OED run after saved SB Solver HTML import on October 22, 2026.
+Reference-result parity and repeatability still need verification; automatic
+SB Solver fetching did not work in that test. See `HOSTING_PILOT_RESULTS.md`.
+The legacy classifier still conflates
 some technical failures with rejections, so its hosted output is not ready for
 publication. Use the isolated source probe to establish access before the broader
 overhaul. Free Render storage/jobs are not yet durable. The Docker image has not
-been built locally in this environment because Docker is unavailable; a successful
-Render build and hosted smoke test are still required.
+been built locally in this environment because Docker is unavailable. The user
+report is hosted smoke-test evidence, not a completed production acceptance test.
 
 Official setup references: [Docker deployment](https://render.com/docs/docker)
 and [changing an existing runtime](https://render.com/docs/native-runtimes#changing-a-services-runtime).

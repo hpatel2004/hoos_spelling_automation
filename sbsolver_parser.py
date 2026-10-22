@@ -1,4 +1,5 @@
 import os
+import logging
 import re
 import subprocess
 import time
@@ -12,7 +13,7 @@ from browser_runtime import create_chrome, hosted_browser
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import TimeoutException, WebDriverException
 from selenium.webdriver.support.ui import WebDriverWait
 
 BASE_URL = "https://www.sbsolver.com/s/"
@@ -21,6 +22,35 @@ DEBUG_PORT = 9222
 CHROME_PROFILE = os.path.expanduser("~/.hoos_spelling_chrome")
 _pending_verification_letters: str | None = None
 _hosted_fetch_lock = Lock()
+logger = logging.getLogger(__name__)
+
+
+def _hosted_challenge_detected(browser):
+    """Check explicit challenge evidence, including challenges with an empty body."""
+    try:
+        title = browser.title.lower()
+        bodies = browser.find_elements(By.TAG_NAME, "body")
+        text = bodies[0].text.lower() if bodies else ""
+        return (
+            "/cdn-cgi/" in browser.current_url
+            or any(marker in title or marker in text for marker in (
+                "verify you are human", "verify that you are human", "checking your browser",
+                "just a moment", "access denied", "too many requests",
+            ))
+            or bool(browser.find_elements(By.CSS_SELECTOR,
+                "#challenge-running, #challenge-stage, #cf-challenge-running, "
+                "iframe[src*='challenges.cloudflare.com']"))
+        )
+    except WebDriverException:
+        return False  # An unreadable page is not confirmed challenge evidence.
+
+
+def _blocked_message():
+    return (
+        "SB Solver blocked or challenged the hosted browser. Open the puzzle "
+        "in your normal browser, then upload its saved HTML page or paste "
+        "the words below. Automatic verification is not supported."
+    )
 
 
 def _fetch_hosted_words(letters: str):
@@ -34,16 +64,9 @@ def _fetch_hosted_words(letters: str):
         driver.get(url)
 
         def ready(browser):
-            text = browser.find_element(By.TAG_NAME, "body").text.lower()
-            if "/cdn-cgi/" in browser.current_url or any(marker in text for marker in (
-                "verify you are human", "verify that you are human", "checking your browser",
-                "just a moment", "access denied", "too many requests",
-            )):
-                raise RuntimeError(
-                    "SB Solver blocked or challenged the hosted browser. Open the puzzle "
-                    "in your normal browser, then upload its saved HTML page or paste "
-                    "the words below. Automatic verification is not supported."
-                )
+            if _hosted_challenge_detected(browser):
+                logger.warning("SB Solver hosted fetch: challenge detected")
+                raise RuntimeError(_blocked_message())
             actual, expected = urlsplit(browser.current_url), urlsplit(url)
             if (actual.scheme, actual.netloc, actual.path.rstrip("/")) != (expected.scheme, expected.netloc, expected.path.rstrip("/")):
                 raise RuntimeError("SB Solver opened a different page. Use the saved-page import or paste the words below.")
@@ -55,8 +78,15 @@ def _fetch_hosted_words(letters: str):
 
         return WebDriverWait(driver, 30).until(ready)
     except TimeoutException as exc:
+        # Navigation itself can time out before the normal polling starts.
+        if driver is not None and _hosted_challenge_detected(driver):
+            logger.warning("SB Solver hosted fetch: challenge detected after timeout")
+            raise RuntimeError(_blocked_message()) from exc
+        logger.warning("SB Solver hosted fetch: timeout; no confirmed challenge or readable word table")
         raise RuntimeError(
             "SB Solver did not load a readable word table within the hosted timeout. "
+            "No security challenge was conclusively detected; loading or page-format "
+            "issues may also cause this. "
             "Open the puzzle in your normal browser, then upload its saved HTML "
             "page or paste the words below."
         ) from exc
