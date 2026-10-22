@@ -19,7 +19,7 @@ from sbsolver_parser import (
     validate_sbsolver_letters,
 )
 from sbsolver_import import parse_saved_sbsolver_page
-from verify.verifier import render_verifier
+from editorial_sheets import fetch_google_sheet_words
 
 
 def init_session_state():
@@ -268,13 +268,49 @@ def clear_classification_results():
     st.session_state.classification_results = None
 
 
-def combine_editorial_word_lists(pasted_text: str, uploaded_file) -> str:
-    uploaded_text = (
-        uploaded_file.getvalue().decode("utf-8-sig")
-        if uploaded_file is not None
-        else ""
+def clear_editorial_sheets():
+    st.session_state.pop("editorial_sheets_loaded", None)
+    clear_classification_results()
+
+
+def render_editorial_sheets():
+    st.caption(
+        "Use two Google Sheets links: one for included words and one for excluded "
+        "words. Put one word per row in column A; an optional Word or Words header "
+        "is supported. The linked tab is used, or the first tab if none is specified. "
+        "Set sharing to Anyone with the link / Viewer, or publish the sheet to the web. "
+        "Only candidate words are affected, and exclusion wins on conflicts."
     )
-    return "\n".join((pasted_text, uploaded_text)).strip()
+    included_link = st.text_input(
+        "Included words — Google Sheets link", key="editorial_included_link",
+        on_change=clear_editorial_sheets, placeholder="https://docs.google.com/spreadsheets/d/…/edit",
+    ).strip()
+    excluded_link = st.text_input(
+        "Excluded words — Google Sheets link", key="editorial_excluded_link",
+        on_change=clear_editorial_sheets, placeholder="https://docs.google.com/spreadsheets/d/…/edit",
+    ).strip()
+    links = (included_link, excluded_link)
+    if st.button("Load / refresh editorial lists", key="load_editorial_sheets", disabled=not any(links)):
+        clear_editorial_sheets()
+        try:
+            with st.spinner("Loading editorial lists from Google Sheets…"):
+                included = fetch_google_sheet_words(included_link) if included_link else []
+                excluded = fetch_google_sheet_words(excluded_link) if excluded_link else []
+        except ValueError as exc:
+            st.error(str(exc))
+        else:
+            st.session_state.editorial_sheets_loaded = {
+                "links": links, "included": included, "excluded": excluded,
+            }
+    if not any(links):
+        return "", "", True
+    loaded = st.session_state.get("editorial_sheets_loaded")
+    if not loaded or loaded["links"] != links:
+        st.info("Load the editorial lists before classifying. Either link may be left blank.")
+        return "", "", False
+    st.success(f"Loaded {len(loaded['included'])} included words and {len(loaded['excluded'])} excluded words.")
+    st.caption("Lists are held for this session. Click Load / refresh after changing words in Google Sheets.")
+    return "\n".join(loaded["included"]), "\n".join(loaded["excluded"]), True
 
 
 def render_step2():
@@ -307,54 +343,7 @@ def render_step2():
         )
 
     with st.expander("Optional: Editorial word filters"):
-        st.caption(
-            "These lists override OED decisions as a final filter. Upload UTF-8 "
-            "text files with one word per line, or paste below. Uploaded and "
-            "pasted lists are combined. Only words in the candidate list are "
-            "affected; exclusion takes precedence if a word appears in both lists."
-        )
-        editorial_included_file = st.file_uploader(
-            "Upload editorially included words (.txt)",
-            type=["txt"],
-            key="editorial_included_file",
-            on_change=clear_classification_results,
-        )
-        editorial_included_text = st.text_area(
-            "Editorially included words (one per line)",
-            height=150,
-            placeholder="Override OED rejections: move these words into Words",
-            key="editorial_included_text",
-            on_change=clear_classification_results,
-        )
-        editorial_excluded_file = st.file_uploader(
-            "Upload editorially excluded words (.txt)",
-            type=["txt"],
-            key="editorial_excluded_file",
-            on_change=clear_classification_results,
-        )
-        editorial_excluded_text = st.text_area(
-            "Editorially excluded words (one per line)",
-            height=150,
-            placeholder="Override OED approvals: move these words into Removed Words",
-            key="editorial_excluded_text",
-            on_change=clear_classification_results,
-        )
-
-        editorial_uploads_valid = True
-        try:
-            editorial_included_text = combine_editorial_word_lists(
-                editorial_included_text, editorial_included_file
-            )
-            editorial_excluded_text = combine_editorial_word_lists(
-                editorial_excluded_text, editorial_excluded_file
-            )
-        except UnicodeDecodeError:
-            st.error(
-                "Could not read an editorial word list. Save both lists as "
-                "UTF-8 plain text (.txt), then upload them again."
-            )
-            clear_classification_results()
-            editorial_uploads_valid = False
+        editorial_included_text, editorial_excluded_text, editorial_lists_valid = render_editorial_sheets()
 
     if not word_list_text.strip():
         return
@@ -363,7 +352,7 @@ def render_step2():
     st.write(f"Loaded {len(words)} words for classification.")
 
     if st.button(
-        "Classify Words", key="classify_words", disabled=not editorial_uploads_valid
+        "Classify Words", key="classify_words", disabled=not editorial_lists_valid
     ):
         clear_classification_results()
         progress = st.progress(0.0, text=f"Processed 0 of {len(words)} words.")
@@ -398,8 +387,8 @@ def main():
 
     st.title("Hoos Spelling Puzzle Generator")
 
-    step1_tab, step2_tab, verifier_tab = st.tabs(
-        ["Step 1: Import SB Solver", "Step 2: OED Classification", "Verifier"]
+    step1_tab, step2_tab = st.tabs(
+        ["Step 1: Import SB Solver", "Step 2: OED Classification"]
     )
 
     with step1_tab:
@@ -407,9 +396,6 @@ def main():
 
     with step2_tab:
         render_step2()
-
-    with verifier_tab:
-        render_verifier()
 
 
 if __name__ == "__main__":

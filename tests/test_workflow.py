@@ -95,11 +95,6 @@ class EditorialPolicyTests(unittest.TestCase):
         self.assertEqual(output["rare"], [("PRICE", "", oed.EDITORIAL_EXCLUDED_NOTE)])
         self.assertEqual(output["levels"]["wahoo_wow"], 2)
 
-    def test_editorial_uploads_are_optional_and_support_utf8_bom(self):
-        self.assertEqual(app.combine_editorial_word_lists("RICE", None), "RICE")
-        self.assertEqual(app.combine_editorial_word_lists("RICE", BytesIO(b"\xef\xbb\xbfprice\r\n")), "RICE\nprice")
-        with self.assertRaises(UnicodeDecodeError):
-            app.combine_editorial_word_lists("", BytesIO(b"\xff"))
 
 
 class BrowserWorkflowTests(unittest.TestCase):
@@ -179,15 +174,22 @@ class VerifierSolverTests(unittest.TestCase):
 
 
 class StreamlitWorkflowTests(unittest.TestCase):
-    def test_saved_import_editorial_uploads_progress_and_replacement(self):
+    def test_saved_import_editorial_sheet_links_progress_and_replacement(self):
         uploads = {
             "sbsolver_saved_page": BytesIO(SAVED_PAGE),
-            "editorial_included_file": BytesIO(b"\xef\xbb\xbfprince\nABSENT"),
-            "editorial_excluded_file": BytesIO(b"price\n"),
         }
 
         def upload(label, **kwargs):
             return uploads[kwargs["key"]]
+
+        sheet_words = {"https://docs.google.com/spreadsheets/d/included/edit": ["PRINCE", "ABSENT"],
+                       "https://docs.google.com/spreadsheets/d/excluded/edit": ["PRICE"]}
+
+        def load_sheet(link):
+            result = sheet_words[link]
+            if isinstance(result, Exception):
+                raise result
+            return result
 
         def classify(words, progress_callback=None):
             self.assertEqual(words, ["RICE", "PRINCE", "PRICE"])
@@ -198,7 +200,7 @@ class StreamlitWorkflowTests(unittest.TestCase):
         with NamedTemporaryFile(suffix=".docx") as export:
             export.write(b"mocked export")
             export.flush()
-            with patch("streamlit.file_uploader", side_effect=upload), patch("sbsolver_parser.fetch_words_sbsolver") as fetch, patch("oed_parser.classify_words", side_effect=classify), patch("oed_parser.create_docx", return_value=export.name):
+            with patch("streamlit.file_uploader", side_effect=upload), patch("editorial_sheets.fetch_google_sheet_words", side_effect=load_sheet), patch("sbsolver_parser.fetch_words_sbsolver") as fetch, patch("oed_parser.classify_words", side_effect=classify), patch("oed_parser.create_docx", return_value=export.name):
                 at = AppTest.from_file("app.py").run()
                 self.assertTrue(button(at, "import_saved_sbsolver").disabled)
                 at.text_input[0].set_value("pRinceq").run()
@@ -207,7 +209,12 @@ class StreamlitWorkflowTests(unittest.TestCase):
                 self.assertEqual(at.session_state["word_list_text"], "RICE\nPRINCE\nPRICE")
                 self.assertEqual(at.code[0].value, "RICE\nPRINCE\nPRICE")
                 self.assertFalse(any(item.key == "fetch_sbsolver" for item in at.button))
-                self.assertEqual({item.key for item in at.text_area}, {"editorial_included_text", "editorial_excluded_text", "verifier_letters"})
+                self.assertEqual(len(at.text_area), 0)
+                next(item for item in at.text_input if item.key == "editorial_included_link").set_value("https://docs.google.com/spreadsheets/d/included/edit").run()
+                next(item for item in at.text_input if item.key == "editorial_excluded_link").set_value("https://docs.google.com/spreadsheets/d/excluded/edit").run()
+                self.assertTrue(button(at, "classify_words").disabled)
+                button(at, "load_editorial_sheets").click().run()
+                self.assertFalse(button(at, "classify_words").disabled)
                 self.assertFalse(any(item.label == "Import a saved SB Solver page" for item in at.expander))
                 fetch.assert_not_called()
                 button(at, "classify_words").click().run()
@@ -226,8 +233,9 @@ class StreamlitWorkflowTests(unittest.TestCase):
                 button(at, "import_saved_sbsolver").click().run()
                 self.assertTrue(any("No SB Solver word table" in error.value for error in at.error))
                 self.assertEqual(at.session_state["word_list_text"], "RICE\nPRINCE\nEDGE")
-                uploads["editorial_included_file"] = BytesIO(b"\xff")
-                at.run()
+                sheet_words["https://docs.google.com/spreadsheets/d/included/edit"] = ValueError("Sheet unavailable")
+                button(at, "load_editorial_sheets").click().run()
+                self.assertTrue(any("Sheet unavailable" in error.value for error in at.error))
                 self.assertTrue(button(at, "classify_words").disabled)
                 at.text_input[0].set_value("Planetq").run()
                 self.assertEqual(at.session_state["word_list_text"], "")

@@ -9,6 +9,8 @@
 
 These decisions supersede conflicting proposed requirements below.
 
+- **Editorial list sources (latest decision):** Replace pasted/uploaded text lists with two Google Sheets links, one included list and one excluded list. Read column A of the selected tab, or the first tab when no tab is specified, with an optional Word/Words header. Sheets must be anonymously readable; no account integration is required. Load/refresh explicitly and show counts. Changing sources invalidates loaded lists and output; a supplied but unreadable source must not silently act as an empty list. Keep candidate-only overrides and exclusion precedence. This supersedes text upload/paste requirements below.
+- **Verifier (latest decision):** Remove the automatic verifier from the hosted app and its deployment. Keep only the supported HTML-import and OED classification workflow.
 - **Acquisition UI (latest decision):** Saved SB Solver HTML import is the primary and only candidate-input path in the main editor UI. Show its uploader directly, outside any expander. Remove automatic-fetch and candidate-list paste controls; retain the normal-browser puzzle link, clear saving instructions, and a read-only imported-word preview. This supersedes earlier fetch-first and candidate-edit/paste requirements below. Editorial included/excluded list inputs remain supported.
 - **Budget:** Prefer free hosting or very low cost. No paid hosting commitment or platform has been selected; measure feasibility and cost in Milestone 0.
 - **Access:** Public site, no user accounts. Low expected distribution does not remove the need for bounded resource use and per-draft isolation. Draft recovery is not required.

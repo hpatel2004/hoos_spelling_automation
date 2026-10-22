@@ -6,7 +6,7 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY app.py browser_runtime.py sbsolver_parser.py sbsolver_import.py oed_parser.py ./
-COPY verify ./verify
+COPY editorial_sheets.py ./
 ENV CHROMIUM_BINARY=/usr/bin/chromium \
     CHROMEDRIVER_BINARY=/usr/bin/chromedriver \
     HOOS_HEADLESS=1 \

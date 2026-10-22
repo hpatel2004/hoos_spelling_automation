@@ -29,16 +29,13 @@ as the primary acquisition route, so the main app now shows the normal-browser
 puzzle link, saving instructions, an always-visible HTML uploader, and an **Import
 words** button. Imported words are shown read-only and carried into OED
 classification. Automatic fetching and candidate-list paste controls have been
-removed from the main app. Editorial inclusion/exclusion inputs remain available.
+removed from the main app. Editorial inclusion/exclusion now uses two Google Sheets links, reading column A from each linked tab. Share them for anonymous viewing and click **Load / refresh editorial lists** before classifying.
 
 Compare the imported list with the source puzzle before classification. Importing
 another page or changing puzzle letters clears prior classification results.
-The automatic acquisition module remains available to the separate developer
-pilot and the separate **Verifier** tab; it is not part of the import-and-classify
-flow. The user explicitly chose to keep the verifier automatic, with its hosted
-access limitation stated. It compares counts for each of seven possible centers,
-before OED rules, and starts only on **Analyze letter sets**. The Docker image
-includes the `verify` package so this tab and the standalone tool share one UI.
+The automatic verifier has also been removed from the main app and Docker image
+at the user's request because it did not work on Render. The editor UI contains
+only the import and OED classification tabs.
 
 ## Pilot limitations
 
