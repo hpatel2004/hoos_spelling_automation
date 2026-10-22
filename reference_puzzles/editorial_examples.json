@@ -1,0 +1,237 @@
+[
+  {
+    "title": "REGICD",
+    "actual_letters": "REGICD",
+    "center_letter": "G",
+    "placeholder": "q",
+    "sbsolver_query": "reGicdq",
+    "accepted": [
+      "DEGREE",
+      "DEGREED",
+      "DIGGER",
+      "DIRGE",
+      "DREDGE",
+      "DREDGED",
+      "DREDGER",
+      "DREG",
+      "EDGE",
+      "EDGED",
+      "EDGER",
+      "EDGIER",
+      "EGGED",
+      "EGGIER",
+      "GIDDIER",
+      "GIGGED",
+      "GIRD",
+      "GIRDED",
+      "GIRDER",
+      "GREE",
+      "GREED",
+      "GREEDIER",
+      "GREIGE",
+      "GRID",
+      "GRIDDED",
+      "REGICIDE",
+      "RIDGE",
+      "RIDGED",
+      "RIDGER",
+      "RIDGIER",
+      "RIGGED",
+      "RIGGER",
+      "RIGID"
+    ],
+    "rejected": [
+      {
+        "word": "CIERGE",
+        "reason": "Low frequency (2)"
+      },
+      {
+        "word": "DERIG",
+        "reason": "No results"
+      },
+      {
+        "word": "DERIGGED",
+        "reason": "No results"
+      },
+      {
+        "word": "DIRIGE",
+        "reason": "Variant form"
+      },
+      {
+        "word": "DREGGIER",
+        "reason": "No results"
+      },
+      {
+        "word": "EGGER",
+        "reason": "Low frequency (2)"
+      },
+      {
+        "word": "GRECE",
+        "reason": "Low frequency (2)"
+      },
+      {
+        "word": "GREECE",
+        "reason": "Variant form"
+      },
+      {
+        "word": "GREEGREE",
+        "reason": "Hyphenated form"
+      },
+      {
+        "word": "GREGE",
+        "reason": "Variant form"
+      },
+      {
+        "word": "GRICE",
+        "reason": "Low frequency (2)"
+      },
+      {
+        "word": "GRICED",
+        "reason": "Missing frequency data"
+      },
+      {
+        "word": "GRICER",
+        "reason": "Missing frequency data"
+      },
+      {
+        "word": "GRIDDER",
+        "reason": "No results"
+      },
+      {
+        "word": "GRIDE",
+        "reason": "Low frequency (2)"
+      },
+      {
+        "word": "GRIDED",
+        "reason": "Low frequency (2)"
+      },
+      {
+        "word": "GRIECE",
+        "reason": "Variant form"
+      },
+      {
+        "word": "GRIECED",
+        "reason": "Missing frequency data"
+      },
+      {
+        "word": "GRIGGED",
+        "reason": "Low frequency (1)"
+      },
+      {
+        "word": "REGIE",
+        "reason": "Accented form"
+      },
+      {
+        "word": "REGREDE",
+        "reason": "Low frequency (1)"
+      },
+      {
+        "word": "REGREDED",
+        "reason": "Low frequency (1)"
+      },
+      {
+        "word": "RERIG",
+        "reason": "Low frequency (2)"
+      },
+      {
+        "word": "RERIGGED",
+        "reason": "Low frequency (2)"
+      },
+      {
+        "word": "RIGIDER",
+        "reason": "No results"
+      }
+    ],
+    "editorial_include": [],
+    "editorial_exclude": [
+      "EGER"
+    ],
+    "levels": {
+      "wa": 5,
+      "wahoo": 10,
+      "wahoowa": 26,
+      "wahoo_wow": 33,
+      "average": 8
+    },
+    "rejections_manually_verified": true,
+    "creator": "Heer Patel",
+    "sbsolver_url": "https://www.sbsolver.com/s/reGicdq",
+    "levels_source": "Manually chosen by editor; WahooWOW equals accepted count",
+    "provenance": "User-provided historical editorial output, clarified October 22, 2026",
+    "candidate_list_provenance": "Union of supplied output sections, not a verified complete SB Solver export",
+    "automated_oed_evidence": false
+  },
+  {
+    "title": "9/8 - ANNOYING (ANOYIG)",
+    "actual_letters": "ANOYIG",
+    "center_letter": "N",
+    "placeholder": "q",
+    "sbsolver_query": "gaiNoqy",
+    "accepted": [
+      "AGAIN",
+      "AGING",
+      "AGONY",
+      "ANGINA",
+      "ANION",
+      "ANNOY",
+      "ANNOYING",
+      "ANON",
+      "GAGGING",
+      "GAIN",
+      "GAINING",
+      "GANG",
+      "GANGING",
+      "GIGGING",
+      "GINNING",
+      "GOING",
+      "GONG",
+      "GONGING",
+      "GONNA",
+      "GOON",
+      "INNING",
+      "NAAN",
+      "NAGGING",
+      "NANA",
+      "NANNY",
+      "NANNYING",
+      "NINNY",
+      "NOGGIN",
+      "NONAGON",
+      "NOON",
+      "ONGOING",
+      "ONION",
+      "YANG",
+      "YOGINI",
+      "ONIONY"
+    ],
+    "rejected": [
+      {
+        "word": "GOONY",
+        "reason": "not in OED"
+      },
+      {
+        "word": "NAGGY",
+        "reason": null
+      }
+    ],
+    "editorial_include": [
+      "NONAGON",
+      "ONIONY"
+    ],
+    "editorial_exclude": [],
+    "levels": {
+      "wa": 8,
+      "wahoo": 13,
+      "wahoowa": 18,
+      "wahoo_wow": 35,
+      "average": 10
+    },
+    "rejections_manually_verified": null,
+    "creator": "Heer Patel",
+    "sbsolver_url": "https://www.sbsolver.com/s/gaiNoqy",
+    "levels_source": "Manually chosen by editor; WahooWOW equals accepted count",
+    "provenance": "User-provided historical editorial output, clarified October 22, 2026",
+    "candidate_list_provenance": "Union of supplied output sections, not a verified complete SB Solver export",
+    "automated_oed_evidence": false
+  }
+]

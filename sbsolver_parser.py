@@ -3,7 +3,11 @@ import re
 import subprocess
 import time
 import urllib.request
+from threading import Lock
 from urllib.error import URLError
+from urllib.parse import urlsplit
+
+from browser_runtime import create_chrome, hosted_browser
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -16,6 +20,52 @@ WORD_SELECTOR = "table.bee-set td.bee-hover a"
 DEBUG_PORT = 9222
 CHROME_PROFILE = os.path.expanduser("~/.hoos_spelling_chrome")
 _pending_verification_letters: str | None = None
+_hosted_fetch_lock = Lock()
+
+
+def _fetch_hosted_words(letters: str):
+    if not _hosted_fetch_lock.acquire(blocking=False):
+        raise RuntimeError("Another SB Solver fetch is running. Please try again when it finishes.")
+    driver = None
+    try:
+        driver = create_chrome()
+        driver.set_page_load_timeout(30)
+        url = sbsolver_link(letters)
+        driver.get(url)
+
+        def ready(browser):
+            text = browser.find_element(By.TAG_NAME, "body").text.lower()
+            if "/cdn-cgi/" in browser.current_url or any(marker in text for marker in (
+                "verify you are human", "verify that you are human", "checking your browser",
+                "just a moment", "access denied", "too many requests",
+            )):
+                raise RuntimeError(
+                    "SB Solver blocked or challenged the hosted browser. Open the puzzle "
+                    "in your normal browser, then upload its saved HTML page or paste "
+                    "the words below. Automatic verification is not supported."
+                )
+            actual, expected = urlsplit(browser.current_url), urlsplit(url)
+            if (actual.scheme, actual.netloc, actual.path.rstrip("/")) != (expected.scheme, expected.netloc, expected.path.rstrip("/")):
+                raise RuntimeError("SB Solver opened a different page. Use the saved-page import or paste the words below.")
+            return list(dict.fromkeys(
+                el.text.strip().upper()
+                for el in browser.find_elements(By.CSS_SELECTOR, WORD_SELECTOR)
+                if el.text.strip()
+            )) or False
+
+        return WebDriverWait(driver, 30).until(ready)
+    except TimeoutException as exc:
+        raise RuntimeError(
+            "SB Solver did not load a readable word table within the hosted timeout. "
+            "Open the puzzle in your normal browser, then upload its saved HTML "
+            "page or paste the words below."
+        ) from exc
+    finally:
+        try:
+            if driver is not None:
+                driver.quit()
+        finally:
+            _hosted_fetch_lock.release()
 
 
 def sbsolver_link(letters: str) -> str:
@@ -73,6 +123,8 @@ def fetch_words_sbsolver(letters: str):
     global _pending_verification_letters
 
     validate_sbsolver_letters(letters)
+    if hosted_browser():
+        return _fetch_hosted_words(letters)
     url = sbsolver_link(letters)
 
     start_debug_chrome()

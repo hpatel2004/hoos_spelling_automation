@@ -1,0 +1,14 @@
+.git
+.agents
+.codex
+.aws
+.env
+.env.*
+**/secrets.toml
+my_venv
+hoos_venv
+.venv
+**/__pycache__
+**/*.pyc
+*.docx
+.DS_Store

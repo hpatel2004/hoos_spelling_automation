@@ -12,6 +12,7 @@ import app
 import oed_parser as oed
 from sbsolver_import import parse_saved_sbsolver_page
 from sbsolver_parser import validate_sbsolver_letters
+from verify import sbsolver as verifier_solver
 
 
 SAVED_PAGE = b'''<!doctype html><html><head><meta charset="utf-8"></head><body>
@@ -132,6 +133,53 @@ class BrowserWorkflowTests(unittest.TestCase):
         for letters in ("", "PRINCEQ", "princeq", "pRincee", "pRince", "../test"):
             with self.subTest(letters=letters), self.assertRaises(ValueError):
                 validate_sbsolver_letters(letters)
+
+
+class VerifierSolverTests(unittest.TestCase):
+    def test_verifier_counts_words_using_the_shared_sbsolver(self):
+        fetched_words = [["WORD"] * count for count in range(1, 8)]
+        progress = []
+
+        with patch.object(
+            verifier_solver, "fetch_words_sbsolver", side_effect=fetched_words
+        ) as fetch:
+            results = verifier_solver.analyze_letter_sets(
+                ["PLANETS"], progress_callback=lambda *event: progress.append(event)
+            )
+
+        queries = [
+            "Planets",
+            "Lpanets",
+            "Aplnets",
+            "Nplaets",
+            "Eplants",
+            "Tplanes",
+            "Splanet",
+        ]
+        for query in queries:
+            validate_sbsolver_letters(query)
+        self.assertEqual(
+            [call.args[0] for call in fetch.call_args_list],
+            queries,
+        )
+        self.assertEqual(
+            [center["count"] for center in results[0]["centers"]],
+            list(range(1, 8)),
+        )
+        self.assertEqual(progress[0], (1, 7, "PLANETS", "P"))
+        self.assertEqual(progress[-1], (7, 7, "PLANETS", "S"))
+
+    def test_verifier_app_loads_with_the_shared_solver(self):
+        at = AppTest.from_file("verify/verifier.py").run()
+
+        self.assertFalse(at.exception)
+        self.assertEqual(at.button[0].label, "Analyze letter sets")
+
+    def test_verifier_no_longer_requires_manual_count_entry(self):
+        at = AppTest.from_file("verify/verifier.py").run()
+
+        self.assertFalse(at.exception)
+        self.assertEqual(len(at.number_input), 2)
 
 
 class StreamlitWorkflowTests(unittest.TestCase):

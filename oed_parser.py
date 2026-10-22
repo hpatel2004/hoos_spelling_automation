@@ -20,6 +20,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from browser_runtime import create_chrome
 
 OED_HOME = "https://www.oed.com/"
 
@@ -228,12 +229,7 @@ def classify_words(
     if not words:
         return common, rare
 
-    options = Options()
-    options.add_argument("--disable-gpu")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-
-    driver = webdriver.Chrome(options=options)
+    driver = create_chrome()
     wait = WebDriverWait(driver, 6)
 
     try:

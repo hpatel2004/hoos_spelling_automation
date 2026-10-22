@@ -1,17 +1,25 @@
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import pandas as pd
 import streamlit as st
 
-from sbsolver import InputIssue, analyze_letter_sets, parse_letter_sets
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from verify.sbsolver import (
+    InputIssue,
+    analyze_letter_sets,
+    parse_letter_sets,
+)
 
 
 st.set_page_config(page_title="SB Solver Center Matrix", page_icon="🐝", layout="wide")
 
 st.title("🐝 SB Solver Center Matrix")
 st.caption(
-    "Enter seven-letter sets, then compare how many SB Solver words are possible "
-    "with each letter in the center."
+    "Compare SB Solver word counts for every possible center letter using Chrome."
 )
 
 with st.sidebar:
@@ -50,13 +58,19 @@ def emphasize_target_range(value: object) -> str:
     return "color: green" if bold_min <= count <= bold_max else ""
 
 
-run = st.button(
-    "Analyze letter sets",
-    type="primary",
-    disabled=(not raw_input.strip() or bold_min > bold_max),
-)
+def render_results(results: list[dict]) -> None:
+    display_frame = make_display_frame(results)
+    center_columns = [
+        column for column in display_frame.columns if column.startswith("Center ")
+    ]
+    styled = display_frame.style.map(emphasize_target_range, subset=center_columns)
+    st.dataframe(styled, hide_index=True, use_container_width=True)
+    st.caption(f"Counts from {bold_min} through {bold_max} are bold.")
 
-if run:
+
+if st.button("Analyze letter sets", type="primary", disabled=(
+    not raw_input.strip() or bold_min > bold_max
+)):
     try:
         letter_sets = parse_letter_sets(raw_input)
     except InputIssue as exc:
@@ -64,32 +78,36 @@ if run:
     else:
         progress = st.progress(0.0, text="Starting Chrome…")
 
-        def report_progress(done: int, total: int, letter_set: str, center: str) -> None:
+        def report_progress(
+            done: int, total: int, letter_set: str, center: str
+        ) -> None:
             progress.progress(
                 done / total,
-                text=f"Checking {letter_set} with {center} in the center ({done}/{total})",
+                text=f"Checking {letter_set} with {center} in the center "
+                f"({done}/{total})",
             )
 
         try:
-            results = analyze_letter_sets(letter_sets, progress_callback=report_progress)
+            results = analyze_letter_sets(
+                letter_sets, progress_callback=report_progress
+            )
         except Exception as exc:
             progress.empty()
+            st.session_state.pop("results", None)
             st.error(f"The SB Solver lookup could not be completed: {exc}")
             st.info(
-                "Make sure Google Chrome and a compatible ChromeDriver are installed, "
-                "then try again."
+                "This app requests SB Solver directly through Chrome. If "
+                "Cloudflare loops, SB Solver is blocking the automated browser; "
+                "the app cannot complete or bypass that challenge."
             )
         else:
             progress.empty()
             st.session_state["results"] = results
             st.success(
-                f"Analyzed {len(results)} letter set{'s' if len(results) != 1 else ''} "
-                f"across {len(results) * 7} center-letter combinations."
+                f"Analyzed {len(results)} letter set"
+                f"{'s' if len(results) != 1 else ''} across "
+                f"{len(results) * 7} center-letter combinations."
             )
 
 if results := st.session_state.get("results"):
-    display_frame = make_display_frame(results)
-    center_columns = [column for column in display_frame.columns if column.startswith("Center ")]
-    styled = display_frame.style.map(emphasize_target_range, subset=center_columns)
-    st.dataframe(styled, hide_index=True, use_container_width=True)
-    st.caption(f"Counts from {bold_min} through {bold_max} are bold.")
+    render_results(results)

@@ -3,14 +3,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Iterable
 
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-
-
-BASE_URL = "https://www.sbsolver.com/s/"
-WORD_SELECTOR = "table.bee-set td.bee-hover a"
+from sbsolver_parser import fetch_words_sbsolver
 
 
 class InputIssue(ValueError):
@@ -45,29 +38,8 @@ def sbsolver_letters(letter_set: str, center_index: int) -> str:
     return center + optional
 
 
-def sbsolver_link(letters: str) -> str:
-    # Do not lowercase this—capitalization identifies the center.
-    return f"{BASE_URL}{letters}"
-
-
-def chrome_options() -> Options:
-    options = Options()
-    options.add_argument("--headless=new")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--window-size=1280,1000")
-    options.page_load_strategy = "eager"
-    return options
-
-
-def fetch_word_count(driver: webdriver.Chrome, letters: str, timeout: int = 12) -> int:
-    driver.get(sbsolver_link(letters))
-    WebDriverWait(driver, timeout).until(
-        lambda current_driver: current_driver.execute_script("return document.readyState")
-        in {"interactive", "complete"}
-    )
-    return len(driver.find_elements(By.CSS_SELECTOR, WORD_SELECTOR))
+def fetch_word_count(letters: str) -> int:
+    return len(fetch_words_sbsolver(letters))
 
 
 def analyze_letter_sets(
@@ -79,28 +51,21 @@ def analyze_letter_sets(
     done = 0
     results: list[dict] = []
 
-    # One hidden browser is reused for the entire batch. This is much faster than
-    # launching Chrome once for each of the seven center-letter permutations.
-    driver = webdriver.Chrome(options=chrome_options())
-    driver.implicitly_wait(5)
-    try:
-        for letter_set in sets:
-            centers = []
-            for center_index, center_letter in enumerate(letter_set):
-                ordered_letters = sbsolver_letters(letter_set, center_index)
-                count = fetch_word_count(driver, ordered_letters)
-                centers.append(
-                    {
-                        "letter": center_letter,
-                        "count": count,
-                        "query": ordered_letters,
-                    }
-                )
-                done += 1
-                if progress_callback:
-                    progress_callback(done, total, letter_set, center_letter)
-            results.append({"letter_set": letter_set, "centers": centers})
-    finally:
-        driver.quit()
+    for letter_set in sets:
+        centers = []
+        for center_index, center_letter in enumerate(letter_set):
+            ordered_letters = sbsolver_letters(letter_set, center_index)
+            count = fetch_word_count(ordered_letters)
+            centers.append(
+                {
+                    "letter": center_letter,
+                    "count": count,
+                    "query": ordered_letters,
+                }
+            )
+            done += 1
+            if progress_callback:
+                progress_callback(done, total, letter_set, center_letter)
+        results.append({"letter_set": letter_set, "centers": centers})
 
     return results

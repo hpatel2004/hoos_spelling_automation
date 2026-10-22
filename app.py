@@ -144,7 +144,7 @@ def render_step1():
     ):
         st.session_state.classification_results = None
         try:
-            with st.spinner("Waiting for the SB Solver word list in Chrome..."):
+            with st.spinner("Fetching the SB Solver word list..."):
                 imported_words = fetch_words_sbsolver(letters)
         except Exception as exc:
             st.error(f"Could not fetch words from SB Solver: {exc}")

@@ -1,6 +1,10 @@
 # hoos_spelling_automation
 A tool for the UVA Cavalier Daily's Puzzle Desk to automate the development of Hoo's Spelling puzzles.
 
+For the Render hosting pilot, follow [RENDER_DEPLOYMENT.md](RENDER_DEPLOYMENT.md).
+Use the root Dockerfile to install the Linux browser; hosted source access is
+still being verified.
+
 ## Setup (one time)
 
 1. Make sure you have Python installed (3.10+ recommended)
@@ -56,10 +60,24 @@ You should have (my_venv) at the beginning of the command line.
 
 ## Verification
 
+Run the optional center-letter comparison tool with:
+
+```bash
+streamlit run verify/verifier.py
+```
+
+Enter one or more seven-letter sets and click **Analyze letter sets**. The
+app opens SB Solver through Chrome and reads the counts directly. Cloudflare
+may block automated browsers; if its verification loops, the app will stop
+with an error rather than repeatedly retrying. It cannot solve or bypass
+Cloudflare's challenge.
+
 Run the offline regression checks from the repository directory:
 
 ```bash
 python -m unittest discover -s tests -v
 ```
 
-These check saved-page imports, word-list synchronization, editorial overrides, progress, and the existing OED criteria using sample HTML and mocked browser responses. They do not make live requests to either site.
+These check saved-page imports, word-list synchronization, editorial overrides,
+progress, and the existing OED criteria using sample HTML and mocked browser
+responses. They do not make live requests to either site.
