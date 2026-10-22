@@ -15,7 +15,6 @@ from oed_parser import (
     split_removed_words,
 )
 from sbsolver_parser import (
-    fetch_words_sbsolver,
     sbsolver_link,
     validate_sbsolver_letters,
 )
@@ -97,17 +96,11 @@ def render_copyable_output(output_html: str):
 
 def set_word_list(text: str):
     st.session_state.word_list_text = text
-    st.session_state.step1_word_list = text
-    st.session_state.step2_word_list = text
     st.session_state.classification_results = None
 
 
-def sync_word_list(source_key: str):
-    set_word_list(st.session_state[source_key])
-
-
 def render_step1():
-    st.subheader("Step 1: Fetch Words from SB Solver")
+    st.subheader("Step 1: Import SB Solver Words")
 
     if "puzzle_letters_input" not in st.session_state:
         st.session_state.puzzle_letters_input = st.session_state.puzzle_letters
@@ -130,63 +123,47 @@ def render_step1():
                 st.session_state.puzzle_letters = letters
                 set_word_list("")
 
-    if valid_letters:
-        st.link_button("Open SB Solver in your normal browser", sbsolver_link(letters))
-        st.caption(
-            "If automatic fetching gets stuck on a repeating security check, "
-            "open this link in your usual Chrome window. Save the loaded puzzle "
-            "as HTML, then upload it under Import a saved SB Solver page below. "
-            "You can also paste the words manually."
-        )
+    if not valid_letters and st.session_state.puzzle_letters:
+        st.session_state.puzzle_letters = ""
+        set_word_list("")
 
-    if st.button(
-        "Fetch Words from SB Solver", key="fetch_sbsolver", disabled=not valid_letters
-    ):
-        st.session_state.classification_results = None
-        try:
-            with st.spinner("Fetching the SB Solver word list..."):
-                imported_words = fetch_words_sbsolver(letters)
-        except Exception as exc:
-            st.error(f"Could not fetch words from SB Solver: {exc}")
-        else:
-            set_word_list("\n".join(imported_words))
-            st.success(f"Fetched {len(imported_words)} words from SB Solver.")
-
-    with st.expander("Import a saved SB Solver page"):
-        st.caption(
-            "Once the words are visible in your normal Chrome window, use "
-            "Save page as to save the puzzle as HTML. Upload the .html file "
-            "here; the app extracts the word list without its links or formatting. "
-            "If Chrome also creates a folder of page assets, you only need the HTML file."
-        )
-        saved_page = st.file_uploader(
-            "Saved SB Solver puzzle page (.html)",
-            type=["html", "htm"],
-            key="sbsolver_saved_page",
-        )
-        if st.button(
-            "Import words from saved page",
-            key="import_saved_sbsolver",
-            disabled=not valid_letters or saved_page is None,
-        ):
-            try:
-                saved_words = parse_saved_sbsolver_page(saved_page.getvalue())
-            except ValueError as exc:
-                st.error(str(exc))
-            else:
-                set_word_list("\n".join(saved_words))
-                st.success(f"Imported {len(saved_words)} words from the saved SB Solver page.")
-
-    if "step1_word_list" not in st.session_state:
-        st.session_state.step1_word_list = st.session_state.word_list_text
-
-    st.text_area(
-        "Paste SB Solver word list (automatically shared with Step 2)",
-        height=400,
-        key="step1_word_list",
-        on_change=sync_word_list,
-        args=("step1_word_list",),
+    st.markdown(
+        "1. Open your puzzle in SB Solver.\n"
+        "2. Once the word table is visible, use **Save page as** in your browser "
+        "to save the page as HTML.\n"
+        "3. Upload the HTML file below and click **Import words**."
     )
+    if valid_letters:
+        st.link_button("Open puzzle in SB Solver", sbsolver_link(letters))
+
+    st.caption(
+        "Upload only the .html file; any accompanying page-assets folder is unnecessary."
+    )
+    saved_page = st.file_uploader(
+        "Saved SB Solver puzzle page (.html)",
+        type=["html", "htm"],
+        key="sbsolver_saved_page",
+    )
+    if st.button(
+        "Import words",
+        key="import_saved_sbsolver",
+        type="primary",
+        disabled=not valid_letters or saved_page is None,
+    ):
+        try:
+            saved_words = parse_saved_sbsolver_page(saved_page.getvalue())
+        except ValueError as exc:
+            st.error(str(exc))
+        else:
+            set_word_list("\n".join(saved_words))
+            st.success(f"Imported {len(saved_words)} words. Continue to Step 2 to classify them with OED.")
+
+    if st.session_state.word_list_text:
+        words = parse_word_list(st.session_state.word_list_text)
+        st.subheader(f"Imported words ({len(words)})")
+        st.caption("Check that these words match your puzzle. To replace the list, import another saved page.")
+        st.code(st.session_state.word_list_text, language=None)
+
 
 def run_classification(
     word_list_text: str,
@@ -298,16 +275,9 @@ def render_step2():
     else:
         st.warning("Enter letters in Step 1 first to auto-fill the puzzle title and link.")
 
-    if "step2_word_list" not in st.session_state:
-        st.session_state.step2_word_list = st.session_state.word_list_text
-    word_list_text = st.text_area(
-        "Word list (one word per line)",
-        height=300,
-        placeholder="AERATE\nARETE\nARTERY\n...",
-        key="step2_word_list",
-        on_change=sync_word_list,
-        args=("step2_word_list",),
-    )
+    word_list_text = st.session_state.word_list_text
+    if not word_list_text.strip():
+        st.info("Import a saved SB Solver HTML page in Step 1 to begin classification.")
 
     with st.expander("Optional: Puzzle metadata"):
         creator = st.text_input("Creator", placeholder="Heer Patel")
@@ -413,7 +383,7 @@ def main():
 
     st.title("Hoos Spelling Puzzle Generator")
 
-    step1_tab, step2_tab = st.tabs(["Step 1: SB Solver", "Step 2: OED Classification"])
+    step1_tab, step2_tab = st.tabs(["Step 1: Import SB Solver", "Step 2: OED Classification"])
 
     with step1_tab:
         render_step1()

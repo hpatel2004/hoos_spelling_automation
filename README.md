@@ -44,9 +44,8 @@ my_venv\Scripts\activate      # Windows
 You should have (my_venv) at the beginning of the command line. 
 
 2. Run the app with `streamlit run app.py`
-3. In **Step 1**, enter the six actual puzzle letters plus your chosen seventh placeholder for SB Solver. Capitalize the actual center letter and leave the others lowercase, then fetch words.
-   If the security checkbox keeps looping, use **Open SB Solver in your normal browser** and complete verification in your usual Chrome window. Once the word list is visible, use **Save page as** and choose an HTML format. In Step 1, expand **Import a saved SB Solver page**, upload the `.html` file, and click **Import words from saved page**. The app extracts plain words from the site's word table; no manual hyperlink or formatting cleanup is needed. If Chrome creates an accompanying asset folder, upload only the HTML file. You can still paste words manually, one per line.
-4. Switch to **Step 2** — the word list, puzzle title, and SB Solver link carry over automatically
+3. In **Step 1: Import SB Solver**, enter the six actual puzzle letters plus your chosen seventh placeholder. Capitalize the actual center letter and leave the others lowercase. Click **Open puzzle in SB Solver**, wait until the word table loads in your normal browser, then use **Save page as** to save the page as HTML. Upload the `.html` file directly in Step 1 and click **Import words**. If the browser saves an accompanying assets folder, upload only the HTML file. Review the imported words shown below; import another saved page to replace them.
+4. Switch to **Step 2: OED Classification** — the imported list, puzzle title, and SB Solver link carry over automatically. Candidate words come from the HTML import; there is no automatic-fetch or candidate-paste control.
 5. In **Optional: Editorial word filters**, optionally upload included and excluded word lists as UTF-8 `.txt` files (one word per line), or paste them. These override OED decisions after classification. Only candidate words are affected, and exclusion wins if a word appears in both lists. Changing a filter clears the previous results; click **Classify Words** to apply the updated lists.
 6. Click **Classify Words**. A progress bar shows the number of words processed and the current word, then download results as HTML or a Word document.
 
@@ -78,6 +77,6 @@ Run the offline regression checks from the repository directory:
 python -m unittest discover -s tests -v
 ```
 
-These check saved-page imports, word-list synchronization, editorial overrides,
+These check saved-page imports, import replacement and puzzle-change invalidation, editorial overrides,
 progress, and the existing OED criteria using sample HTML and mocked browser
 responses. They do not make live requests to either site.

@@ -7,11 +7,12 @@ Status: **USER-CONFIRMED OED OUTPUT MATCH — repeatability pending.**
 The user reports that automatic SB Solver fetching did not work, but importing
 the saved SB Solver HTML did, and the OED classification step worked on Render.
 This supports feasibility of the intended HTML-import → hosted OED workflow.
-The user subsequently supplied the SB Solver error: `SB Solver did not load a
-readable word table within the hosted timeout.` The user suspects Cloudflare.
-This establishes a timeout, not a confirmed challenge. Local diagnostics now
-also check challenge titles and known challenge elements, including after a
-navigation timeout. The change has not yet been tested on Render.
+The initial reported timeout was followed by an explicit hosted-browser
+blocked/challenged error after enhanced detection was deployed. This confirms
+challenge detection in the app; no challenge tokens or page evidence were retained.
+The user approved HTML import as the primary workflow and requested removal of
+both automatic fetch and candidate-list paste controls. The main UI now follows
+that direction, with a visible uploader and read-only imported-word preview.
 
 The user subsequently identified the tested query as `aNoyigq` (the ANOYIG
 reference letter set, center N, placeholder Q) and confirmed that everything
@@ -22,8 +23,8 @@ repeatability and broader representative metadata checks remain pending.
 Preserve manual levels and editorial overrides when comparing; those are separate
 from OED evidence.
 
-Automatic SB Solver acquisition remains unverified. Saved HTML import is the
-demonstrated acquisition route; do not promise automatic fetching at launch.
+Automatic SB Solver acquisition is blocked/challenged in the reported test. Saved
+HTML import is the demonstrated and approved acquisition route for the main UI.
 
 ## Earlier browser startup failure
 

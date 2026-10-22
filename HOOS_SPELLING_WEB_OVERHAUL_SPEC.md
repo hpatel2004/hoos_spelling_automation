@@ -9,6 +9,7 @@
 
 These decisions supersede conflicting proposed requirements below.
 
+- **Acquisition UI (latest decision):** Saved SB Solver HTML import is the primary and only candidate-input path in the main editor UI. Show its uploader directly, outside any expander. Remove automatic-fetch and candidate-list paste controls; retain the normal-browser puzzle link, clear saving instructions, and a read-only imported-word preview. This supersedes earlier fetch-first and candidate-edit/paste requirements below. Editorial included/excluded list inputs remain supported.
 - **Budget:** Prefer free hosting or very low cost. No paid hosting commitment or platform has been selected; measure feasibility and cost in Milestone 0.
 - **Access:** Public site, no user accounts. Low expected distribution does not remove the need for bounded resource use and per-draft isolation. Draft recovery mechanism remains to be chosen.
 - **Overrides:** Existing included/excluded lists may explicitly resolve technical OED lookup failures for candidate words; exclusion wins. Preserve the underlying unresolved lookup status separately from the final editorial decision and attribute resolution to the list. Do not require a separate per-word manual verification when an existing list supplies the resolution.

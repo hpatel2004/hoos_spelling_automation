@@ -17,15 +17,24 @@ deploying with Render's Python runtime is insufficient.
    Render's `PORT`. Keep the **Free** instance plan. No disk or paid worker is
    required for this startup test.
 5. Deploy. Verify the build installs `chromium` and `chromium-driver` and that
-   Streamlit starts before testing a fetch such as `reGicdq`.
+   Streamlit starts before opening a puzzle such as `reGicdq` and importing its saved HTML page.
 
 Do not use `pilot/Dockerfile` as the web-service Dockerfile: it runs a one-shot
 command-line probe and does not serve the app.
 
-If Chromium starts but SB Solver challenges the server, the app reports that
-explicitly. Use the normal-browser link and saved HTML/paste fallback; this
-change cannot guarantee source access. Compare the candidate list with the
-reference puzzle before treating acquisition as verified.
+## Current editor workflow
+
+SB Solver challenged the hosted browser in testing. The user approved saved HTML
+as the primary acquisition route, so the main app now shows the normal-browser
+puzzle link, saving instructions, an always-visible HTML uploader, and an **Import
+words** button. Imported words are shown read-only and carried into OED
+classification. Automatic fetching and candidate-list paste controls have been
+removed from the main app. Editorial inclusion/exclusion inputs remain available.
+
+Compare the imported list with the source puzzle before classification. Importing
+another page or changing puzzle letters clears prior classification results.
+The automatic acquisition module remains available to the separate developer
+pilot/verifier; it is not part of the editor-facing acquisition flow.
 
 ## Pilot limitations
 

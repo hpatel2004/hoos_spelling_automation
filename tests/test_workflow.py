@@ -48,10 +48,6 @@ def button(at, key):
     return next(item for item in at.button if item.key == key)
 
 
-def word_editor(at, key):
-    return next(item for item in at.text_area if item.key == key)
-
-
 class SavedPageTests(unittest.TestCase):
     def test_only_word_table_links_are_imported_in_source_order(self):
         self.assertEqual(parse_saved_sbsolver_page(SAVED_PAGE), ["RICE", "PRINCE", "PRICE"])
@@ -183,7 +179,7 @@ class VerifierSolverTests(unittest.TestCase):
 
 
 class StreamlitWorkflowTests(unittest.TestCase):
-    def test_saved_import_editorial_uploads_progress_and_synchronization(self):
+    def test_saved_import_editorial_uploads_progress_and_replacement(self):
         uploads = {
             "sbsolver_saved_page": BytesIO(SAVED_PAGE),
             "editorial_included_file": BytesIO(b"\xef\xbb\xbfprince\nABSENT"),
@@ -208,8 +204,11 @@ class StreamlitWorkflowTests(unittest.TestCase):
                 at.text_input[0].set_value("pRinceq").run()
                 button(at, "import_saved_sbsolver").click().run()
                 self.assertFalse(at.exception)
-                self.assertEqual(word_editor(at, "step1_word_list").value, "RICE\nPRINCE\nPRICE")
-                self.assertEqual(word_editor(at, "step2_word_list").value, "RICE\nPRINCE\nPRICE")
+                self.assertEqual(at.session_state["word_list_text"], "RICE\nPRINCE\nPRICE")
+                self.assertEqual(at.code[0].value, "RICE\nPRINCE\nPRICE")
+                self.assertFalse(any(item.key == "fetch_sbsolver" for item in at.button))
+                self.assertEqual({item.key for item in at.text_area}, {"editorial_included_text", "editorial_excluded_text"})
+                self.assertFalse(any(item.label == "Import a saved SB Solver page" for item in at.expander))
                 fetch.assert_not_called()
                 button(at, "classify_words").click().run()
                 self.assertFalse(at.exception)
@@ -217,20 +216,34 @@ class StreamlitWorkflowTests(unittest.TestCase):
                 results = at.session_state["classification_results"]
                 self.assertEqual([word for word, _, _ in results["common"]], ["PRINCE", "RICE"])
                 self.assertEqual([word for word, _, _ in results["rare"]], ["PRICE"])
-                word_editor(at, "step2_word_list").set_value("RICE").run()
-                self.assertEqual(word_editor(at, "step1_word_list").value, "RICE")
+                uploads["sbsolver_saved_page"] = BytesIO(SAVED_PAGE.replace(b">PRICE<", b">EDGE<"))
+                at.run()
+                button(at, "import_saved_sbsolver").click().run()
+                self.assertEqual(at.session_state["word_list_text"], "RICE\nPRINCE\nEDGE")
                 self.assertIsNone(at.session_state["classification_results"])
                 uploads["sbsolver_saved_page"] = BytesIO(b"<h1>Verify you are human</h1>")
                 at.run()
                 button(at, "import_saved_sbsolver").click().run()
                 self.assertTrue(any("No SB Solver word table" in error.value for error in at.error))
-                self.assertEqual(word_editor(at, "step2_word_list").value, "RICE")
+                self.assertEqual(at.session_state["word_list_text"], "RICE\nPRINCE\nEDGE")
                 uploads["editorial_included_file"] = BytesIO(b"\xff")
                 at.run()
                 self.assertTrue(button(at, "classify_words").disabled)
                 at.text_input[0].set_value("Planetq").run()
-                self.assertEqual(word_editor(at, "step1_word_list").value, "")
-                self.assertEqual(word_editor(at, "step2_word_list").value, "")
+                self.assertEqual(at.session_state["word_list_text"], "")
+                self.assertFalse(at.exception)
+
+    def test_clearing_or_invalidating_letters_requires_new_import(self):
+        with patch("streamlit.file_uploader", return_value=BytesIO(SAVED_PAGE)):
+            at = AppTest.from_file("app.py").run()
+            for invalid in ("", "BAD"):
+                at.text_input[0].set_value("pRinceq").run()
+                button(at, "import_saved_sbsolver").click().run()
+                self.assertTrue(at.session_state["word_list_text"])
+                at.text_input[0].set_value(invalid).run()
+                self.assertEqual(at.session_state["word_list_text"], "")
+                self.assertTrue(button(at, "import_saved_sbsolver").disabled)
+                self.assertFalse(any(item.key == "classify_words" for item in at.button))
                 self.assertFalse(at.exception)
 
 
